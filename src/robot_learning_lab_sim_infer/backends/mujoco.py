@@ -7,11 +7,11 @@ from typing import Any
 
 import numpy as np
 
-from sim2sim.backends.base import SimulatorBackend
-from sim2sim.config import DeployConfig
-from sim2sim.controllers.base import MotorController
-from sim2sim.controllers.pd import PDController
-from sim2sim.controllers.mit import MITCheetahController
+from robot_learning_lab_sim_infer.backends.base import SimulatorBackend
+from robot_learning_lab_sim_infer.config import DeployConfig
+from robot_learning_lab_sim_infer.controllers.base import MotorController
+from robot_learning_lab_sim_infer.controllers.pd import PDController
+from robot_learning_lab_sim_infer.controllers.mit import MITCheetahController
 
 
 _CONTROLLER_REGISTRY: dict[str, type[MotorController]] = {

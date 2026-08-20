@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sim2sim.backends.base import SimulatorBackend
+from robot_learning_lab_sim_infer.backends.base import SimulatorBackend
 
 _BACKENDS: dict[str, type[SimulatorBackend]] = {}
 
@@ -46,7 +46,7 @@ def list_backends() -> list[str]:
 def _register_builtin_backends() -> None:
     """Register built-in backends if their dependencies are available."""
     try:
-        from sim2sim.backends.mujoco import MuJoCoBackend
+        from robot_learning_lab_sim_infer.backends.mujoco import MuJoCoBackend
 
         register_backend("mujoco", MuJoCoBackend)
     except ImportError:

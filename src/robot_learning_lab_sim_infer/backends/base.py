@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from sim2sim.config import DeployConfig
+from robot_learning_lab_sim_infer.config import DeployConfig
 
 
 class SimulatorBackend(ABC):

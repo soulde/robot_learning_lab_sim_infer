@@ -1,10 +1,10 @@
-# sim2sim
+# robot_learning_lab_sim_infer
 
 Sim-to-sim policy validation with deploy.json configuration.
 
 ## Overview
 
-`sim2sim` enables validating trained policies in a different simulator before deploying to real hardware. It reads the `deploy.json` configuration exported during training and runs the policy in MuJoCo (or other backends) for validation.
+`robot_learning_lab_sim_infer` enables validating trained policies in a different simulator before deploying to real hardware. It reads the `deploy.json` configuration exported during training and runs the policy in MuJoCo (or other backends) for validation.
 
 ## Features
 
@@ -18,13 +18,13 @@ Sim-to-sim policy validation with deploy.json configuration.
 
 ```bash
 # From robot_lab workspace
-uv pip install --python .venv/bin/python -e ./source/sim2sim --no-build-isolation
+uv pip install --python .venv/bin/python -e ./source/robot_learning_lab_sim_infer --no-build-isolation
 
 # With MuJoCo support
-uv pip install --python .venv/bin/python -e './source/sim2sim[mujoco]' --no-build-isolation
+uv pip install --python .venv/bin/python -e './source/robot_learning_lab_sim_infer[mujoco]' --no-build-isolation
 
 # Full install
-uv pip install --python .venv/bin/python -e './source/sim2sim[all]' --no-build-isolation
+uv pip install --python .venv/bin/python -e './source/robot_learning_lab_sim_infer[all]' --no-build-isolation
 ```
 
 ## Quick Start
@@ -36,28 +36,28 @@ cd source/rll_rl
 python examples/gymnasium/ppo_play.py checkpoint.pt --env-id Pendulum-v1 --export-deploy --deploy-output deploy.json
 ```
 
-### 2. Run sim2sim validation
+### 2. Run robot_learning_lab_sim_infer validation
 
 ```bash
 # Basic torque control with PD controller
-sim2sim -d deploy.json -c checkpoint.pt --mjcf robot.xml
+robot_learning_lab_sim_infer -d deploy.json -c checkpoint.pt --mjcf robot.xml
 
 # MIT Cheetah controller
-sim2sim -d deploy.json -c checkpoint.pt --mjcf robot.xml --controller mit_cheetah
+robot_learning_lab_sim_infer -d deploy.json -c checkpoint.pt --mjcf robot.xml --controller mit_cheetah
 
 # Custom PD gains
-sim2sim -d deploy.json -c checkpoint.pt --mjcf robot.xml --kp 50 --kd 2.0
+robot_learning_lab_sim_infer -d deploy.json -c checkpoint.pt --mjcf robot.xml --kp 50 --kd 2.0
 
 # Render
-sim2sim -d deploy.json -c checkpoint.pt --mjcf robot.xml --render
+robot_learning_lab_sim_infer -d deploy.json -c checkpoint.pt --mjcf robot.xml --render
 ```
 
 ## Architecture
 
 ```
-source/sim2sim/
+source/robot_learning_lab_sim_infer/
 ├── pyproject.toml
-├── src/sim2sim/
+├── src/robot_learning_lab_sim_infer/
 │   ├── __init__.py
 │   ├── config.py              # DeployConfig dataclass + loader
 │   ├── history.py             # Observation history buffer
@@ -87,7 +87,7 @@ torque = Kp * (target_pos - current_pos) - Kd * current_vel
 ```
 
 ```bash
-sim2sim --controller pd --kp 30 --kd 0.8
+robot_learning_lab_sim_infer --controller pd --kp 30 --kd 0.8
 ```
 
 ### MIT Cheetah Controller
@@ -95,7 +95,7 @@ sim2sim --controller pd --kp 30 --kd 0.8
 Torque controller with feedforward, gravity compensation, and virtual spring-damper:
 
 ```bash
-sim2sim --controller mit_cheetah --kp 40 --kd 1.0 --virtual-spring-k 50
+robot_learning_lab_sim_infer --controller mit_cheetah --kp 40 --kd 1.0 --virtual-spring-k 50
 ```
 
 Features:
@@ -106,11 +106,11 @@ Features:
 ## API Usage
 
 ```python
-from sim2sim import load_deploy_config
-from sim2sim.backends import create_backend
-from sim2sim.controllers import MITCheetahController
-from sim2sim.policy import RllRlPolicyLoader
-from sim2sim.wrappers import DeployWrapper
+from robot_learning_lab_sim_infer import load_deploy_config
+from robot_learning_lab_sim_infer.backends import create_backend
+from robot_learning_lab_sim_infer.controllers import MITCheetahController
+from robot_learning_lab_sim_infer.policy import RllRlPolicyLoader
+from robot_learning_lab_sim_infer.wrappers import DeployWrapper
 
 # Load config
 cfg = load_deploy_config("deploy.json")
@@ -176,7 +176,7 @@ Follows the deploy_std specification:
 ## Development
 
 ```bash
-cd source/sim2sim
+cd source/robot_learning_lab_sim_infer
 ruff check src tests
 pytest tests
 ```

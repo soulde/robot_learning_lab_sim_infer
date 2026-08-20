@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from sim2sim.policy.base import PolicyLoader
+from robot_learning_lab_sim_infer.policy.base import PolicyLoader
 
 
 class RllRlPolicyLoader(PolicyLoader):

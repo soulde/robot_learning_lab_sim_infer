@@ -10,10 +10,10 @@ from typing import Any
 
 import numpy as np
 
-from sim2sim.backends.factory import create_backend, list_backends
-from sim2sim.config import load_deploy_config
-from sim2sim.controllers import PDController, MITCheetahController
-from sim2sim.wrappers.deploy_wrapper import DeployWrapper
+from robot_learning_lab_sim_infer.backends.factory import create_backend, list_backends
+from robot_learning_lab_sim_infer.config import load_deploy_config
+from robot_learning_lab_sim_infer.controllers import PDController, MITCheetahController
+from robot_learning_lab_sim_infer.wrappers.deploy_wrapper import DeployWrapper
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,16 +24,16 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Examples:
   # Basic torque control with PD controller
-  sim2sim -d deploy.json -c model.pt --mjcf robot.xml
+  robot_learning_lab_sim_infer -d deploy.json -c model.pt --mjcf robot.xml
 
   # MIT Cheetah controller
-  sim2sim -d deploy.json -c model.pt --mjcf robot.xml --controller mit_cheetah
+  robot_learning_lab_sim_infer -d deploy.json -c model.pt --mjcf robot.xml --controller mit_cheetah
 
   # Custom PD gains
-  sim2sim -d deploy.json -c model.pt --mjcf robot.xml --kp 50 --kd 2.0
+  robot_learning_lab_sim_infer -d deploy.json -c model.pt --mjcf robot.xml --kp 50 --kd 2.0
 
   # Render with human view
-  sim2sim -d deploy.json -c model.pt --mjcf robot.xml --render
+  robot_learning_lab_sim_infer -d deploy.json -c model.pt --mjcf robot.xml --render
         """,
     )
 
@@ -192,7 +192,7 @@ def main() -> None:
     print(f"  actuator joints: {len(cfg.actuator.stiffness)}")
 
     print(f"\nLoading policy from: {args.checkpoint}")
-    from sim2sim.policy.rll_rl import RllRlPolicyLoader
+    from robot_learning_lab_sim_infer.policy.rll_rl import RllRlPolicyLoader
     loader = RllRlPolicyLoader()
     loader.load(
         args.checkpoint,

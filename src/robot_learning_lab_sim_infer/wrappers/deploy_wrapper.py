@@ -6,8 +6,8 @@ from typing import Any
 
 import numpy as np
 
-from sim2sim.config import DeployConfig, ObsTerm, ActionTerm
-from sim2sim.history import HistoryBuffer
+from robot_learning_lab_sim_infer.config import DeployConfig, ObsTerm, ActionTerm
+from robot_learning_lab_sim_infer.history import HistoryBuffer
 
 
 class DeployWrapper:

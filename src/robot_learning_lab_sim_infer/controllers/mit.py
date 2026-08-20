@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from sim2sim.controllers.base import MotorController
+from robot_learning_lab_sim_infer.controllers.base import MotorController
 
 
 class MITCheetahController(MotorController):
