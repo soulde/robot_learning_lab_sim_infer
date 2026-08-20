@@ -11,6 +11,7 @@ Sim-to-sim policy validation with deploy.json configuration.
 - **deploy.json driven**: Reads observation/action configurations from deploy.json (deploy_std standard)
 - **Torque control default**: Simulation uses motor torque interface, matching real robot behavior
 - **Built-in controllers**: PD and MIT Cheetah-style controllers with gravity/friction compensation
+- **Scene injection**: Automatically injects robot MJCF into a generic scene with floor, lighting, and camera
 - **History support**: Stacks observation frames for encoder-based policies
 - **rll_rl integration**: Loads PPO/AMP/FastSAC/TDMPC2 checkpoints directly
 
@@ -102,6 +103,47 @@ Features:
 - Gravity compensation via MuJoCo's `mj_rne`
 - Coulomb + viscous friction model
 - Optional virtual spring-damper for balance
+
+## Scene Injection
+
+The backend automatically injects your robot MJCF into a generic scene with floor, lighting, and camera. If your robot MJCF already has `<worldbody>`, it is used directly.
+
+```bash
+# Robot-only MJCF (no <worldbody>) - auto-injected into scene
+robot_learning_lab_sim_infer -d deploy.json -c checkpoint.pt --mjcf robot.xml
+
+# Use custom scene template
+robot_learning_lab_sim_infer -d deploy.json -c checkpoint.pt --mjcf robot.xml --scene custom_scene.xml
+
+# Override timestep
+robot_learning_lab_sim_infer -d deploy.json -c checkpoint.pt --mjcf robot.xml --timestep 0.001
+```
+
+### Scene Template
+
+Built-in scene includes:
+- Ground plane with texture
+- Directional light
+- Track camera
+- Default physics settings
+
+```xml
+<mujoco model="scene">
+  <compiler angle="radian" meshdir="." autolimits="true"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <asset>
+    <texture type="skybox" builtin="gradient" .../>
+    <texture name="texplane" type="2d" builtin="checker" .../>
+    <material name="matplane" texture="texplane" .../>
+  </asset>
+  <worldbody>
+    <light pos="0 0 3.5" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
+    <geom name="floor" type="plane" size="10 10 0.1" material="matplane"/>
+    <camera name="track" pos="1.5 0 0.8" xyaxes="0 1 0 -1 0 0.5"/>
+    <!-- Robot body injected here -->
+  </worldbody>
+</mujoco>
+```
 
 ## API Usage
 

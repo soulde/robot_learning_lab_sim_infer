@@ -1,0 +1,91 @@
+<mujoco model="go2">
+  <compiler angle="radian" meshdir="."/>
+  <default>
+    <joint armature="0.01" damping="0.1"/>
+    <geom condim="3" margin="0.001"/>
+  </default>
+  <worldbody>
+    <body name="base" pos="0 0 0.4">
+      <inertial pos="0 0 0" mass="12.0" diaginertia="0.0355 0.0692 0.0804"/>
+      <geom type="capsule" fromto="-0.15 0 0 0.15 0 0" size="0.04" rgba="0.2 0.2 0.8 1"/>
+      <joint name="root_x" type="free" damping="0"/>
+
+      <body name="FL_hip" pos="0.185 0.095 0">
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001"/>
+        <joint name="FL_hip_joint" type="hinge" axis="1 0 0" range="-0.80 2.86" damping="0.5"/>
+        <body name="FL_thigh" pos="0 0 -0.08">
+          <inertial pos="0 0 -0.1" mass="1.0" diaginertia="0.005 0.005 0.001"/>
+          <joint name="FL_thigh_joint" type="hinge" axis="0 1 0" range="-2.33 2.87" damping="0.8"/>
+          <body name="FL_calf" pos="0 0 -0.2">
+            <inertial pos="0 0 -0.1" mass="0.5" diaginertia="0.002 0.002 0.001"/>
+            <joint name="FL_calf_joint" type="hinge" axis="0 1 0" range="-2.70 -0.46" damping="0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.2" size="0.015" rgba="0.8 0.2 0.2 1"/>
+          </body>
+        </body>
+      </body>
+
+      <body name="FR_hip" pos="0.185 -0.095 0">
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001"/>
+        <joint name="FR_hip_joint" type="hinge" axis="1 0 0" range="-0.80 2.86" damping="0.5"/>
+        <body name="FR_thigh" pos="0 0 -0.08">
+          <inertial pos="0 0 -0.1" mass="1.0" diaginertia="0.005 0.005 0.001"/>
+          <joint name="FR_thigh_joint" type="hinge" axis="0 1 0" range="-2.33 2.87" damping="0.8"/>
+          <body name="FR_calf" pos="0 0 -0.2">
+            <inertial pos="0 0 -0.1" mass="0.5" diaginertia="0.002 0.002 0.001"/>
+            <joint name="FR_calf_joint" type="hinge" axis="0 1 0" range="-2.70 -0.46" damping="0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.2" size="0.015" rgba="0.8 0.2 0.2 1"/>
+          </body>
+        </body>
+      </body>
+
+      <body name="RL_hip" pos="-0.185 0.095 0">
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001"/>
+        <joint name="RL_hip_joint" type="hinge" axis="1 0 0" range="-0.80 2.86" damping="0.5"/>
+        <body name="RL_thigh" pos="0 0 -0.08">
+          <inertial pos="0 0 -0.1" mass="1.0" diaginertia="0.005 0.005 0.001"/>
+          <joint name="RL_thigh_joint" type="hinge" axis="0 1 0" range="-2.33 2.87" damping="0.8"/>
+          <body name="RL_calf" pos="0 0 -0.2">
+            <inertial pos="0 0 -0.1" mass="0.5" diaginertia="0.002 0.002 0.001"/>
+            <joint name="RL_calf_joint" type="hinge" axis="0 1 0" range="-2.70 -0.46" damping="0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.2" size="0.015" rgba="0.8 0.2 0.2 1"/>
+          </body>
+        </body>
+      </body>
+
+      <body name="RR_hip" pos="-0.185 -0.095 0">
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001"/>
+        <joint name="RR_hip_joint" type="hinge" axis="1 0 0" range="-0.80 2.86" damping="0.5"/>
+        <body name="RR_thigh" pos="0 0 -0.08">
+          <inertial pos="0 0 -0.1" mass="1.0" diaginertia="0.005 0.005 0.001"/>
+          <joint name="RR_thigh_joint" type="hinge" axis="0 1 0" range="-2.33 2.87" damping="0.8"/>
+          <body name="RR_calf" pos="0 0 -0.2">
+            <inertial pos="0 0 -0.1" mass="0.5" diaginertia="0.002 0.002 0.001"/>
+            <joint name="RR_calf_joint" type="hinge" axis="0 1 0" range="-2.70 -0.46" damping="0.5"/>
+            <geom type="capsule" fromto="0 0 0 0 0 -0.2" size="0.015" rgba="0.8 0.2 0.2 1"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position joint="FL_hip_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="FL_thigh_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="FL_calf_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="FR_hip_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="FR_thigh_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="FR_calf_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="RL_hip_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="RL_thigh_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="RL_calf_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="RR_hip_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="RR_thigh_joint" kp="30" ctrlrange="-100 100"/>
+    <position joint="RR_calf_joint" kp="30" ctrlrange="-100 100"/>
+  </actuator>
+
+  <sensor>
+    <framequat objtype="body" objname="base" name="base_quat"/>
+    <gyro objtype="body" objname="base" name="base_gyro"/>
+    <accelerometer objtype="body" objname="base" name="base_acc"/>
+  </sensor>
+</mujoco>

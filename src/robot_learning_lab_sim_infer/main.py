@@ -54,7 +54,17 @@ Examples:
     )
     parser.add_argument(
         "--mjcf",
-        help="Path to MJCF model file (required for MuJoCo backend).",
+        help="Path to MJCF model file (robot only or combined scene).",
+    )
+    parser.add_argument(
+        "--scene",
+        help="Path to scene template MJCF. If not set, uses built-in default scene.",
+    )
+    parser.add_argument(
+        "--timestep",
+        type=float,
+        default=None,
+        help="Simulation timestep override (default: from deploy.json or 0.002).",
     )
     parser.add_argument(
         "--policy-loader",
@@ -228,6 +238,8 @@ def main() -> None:
             gravity=args.gravity,
             controller=args.controller,
             controller_kwargs=controller_kwargs,
+            scene=args.scene,
+            timestep=args.timestep,
         )
     else:
         raise NotImplementedError(f"Backend '{args.backend}' not yet implemented")

@@ -12,6 +12,7 @@ from robot_learning_lab_sim_infer.config import DeployConfig
 from robot_learning_lab_sim_infer.controllers.base import MotorController
 from robot_learning_lab_sim_infer.controllers.pd import PDController
 from robot_learning_lab_sim_infer.controllers.mit import MITCheetahController
+from robot_learning_lab_sim_infer.scene import build_combined_mjcf
 
 
 _CONTROLLER_REGISTRY: dict[str, type[MotorController]] = {
@@ -29,6 +30,7 @@ class MuJoCoBackend(SimulatorBackend):
     """MuJoCo-based simulator backend for policy validation.
 
     Defaults to torque control interface. Supports PD and MIT Cheetah controllers.
+    Automatically injects robot into scene if MJCF lacks <worldbody>.
     """
 
     def __init__(self, render_mode: str | None = None):
@@ -46,6 +48,7 @@ class MuJoCoBackend(SimulatorBackend):
         self._action_type: str = "joint_torque"
         self._default_qpos: np.ndarray | None = None
         self._controller: MotorController | None = None
+        self._combined_mjcf: Path | None = None
 
     def load(
         self,
@@ -56,12 +59,14 @@ class MuJoCoBackend(SimulatorBackend):
         """Load a MuJoCo model.
 
         Args:
-            model_path: Path to MJCF XML file.
+            model_path: Path to MJCF XML file (robot only or combined scene).
             cfg: Deploy configuration.
             **kwargs: Additional options:
                 - gravity: Gravity vector override.
                 - controller: Controller type ('pd', 'mit_cheetah', or MotorController instance).
                 - controller_kwargs: Dict of kwargs passed to controller constructor.
+                - scene: Path to scene template MJCF (default: built-in scene).
+                - timestep: Simulation timestep (default: from cfg.step_dt or 0.002).
         """
         import mujoco
 
@@ -70,7 +75,17 @@ class MuJoCoBackend(SimulatorBackend):
         if not model_path.exists():
             raise FileNotFoundError(f"MJCF file not found: {model_path}")
 
-        self._model = mujoco.MjModel.from_xml_path(str(model_path))
+        scene_path = kwargs.get("scene")
+        timestep = kwargs.get("timestep", cfg.step_dt if cfg else 0.002)
+
+        combined_path = build_combined_mjcf(
+            robot_path=model_path,
+            scene_template=scene_path,
+            timestep=timestep,
+        )
+        self._combined_mjcf = combined_path
+
+        self._model = mujoco.MjModel.from_xml_path(str(combined_path))
         self._data = mujoco.MjData(self._model)
 
         gravity = kwargs.get("gravity")
@@ -292,6 +307,11 @@ class MuJoCoBackend(SimulatorBackend):
             self._renderer = None
         self._model = None
         self._data = None
+        if self._combined_mjcf is not None and self._combined_mjcf.exists():
+            try:
+                self._combined_mjcf.unlink()
+            except OSError:
+                pass
 
     @property
     def n_joints(self) -> int:
