@@ -1,61 +1,20 @@
-[build-system]
-requires = ["setuptools>=80", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "robot_learning_lab_sim_infer"
+name = "robot-learning-lab-sim-infer"
 version = "0.1.0"
-description = "Sim-to-sim policy validation with deploy.json configuration."
-readme = "README.md"
-requires-python = ">=3.10"
-license = {text = "BSD-3-Clause"}
-authors = [
-    {name = "Soulde Developers"},
-]
-keywords = ["robotics", "robot_learning_lab_sim_infer", "mujoco", "policy-validation", "torque-control"]
+description = "Generic TorchScript MuJoCo sim2sim runner"
+requires-python = ">=3.10,<3.13"
 dependencies = [
-    "numpy>=1.23",
-    "jsonschema>=4.0",
-]
-
-[project.urls]
-Repository = "https://github.com/soulde/robot_learning_lab_sim_infer"
-
-[project.optional-dependencies]
-mujoco = ["mujoco>=3.1.0"]
-rll_rl = ["rll_rl"]
-all = [
-    "mujoco>=3.1.0",
-    "rll_rl",
-]
-dev = [
-    "pytest>=9.0.0",
-    "ruff>=0.14.0",
+    "mujoco>=3.1,<4",
+    "numpy>=1.24,<3",
+    "torch>=2.0,<3",
 ]
 
 [project.scripts]
-robot_learning_lab_sim_infer = "robot_learning_lab_sim_infer.main:main"
+robot-learning-lab-sim-infer = "robot_learning_lab_sim_infer.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.ruff]
-line-length = 120
-target-version = "py310"
-
-[tool.ruff.lint]
-select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "UP",     # pyupgrade
-    "SIM",    # flake8-simplify
-]
-ignore = [
-    "E402",   # Module level import not at top of file
-    "RET504", # Unnecessary variable assignment before return statement
-]
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
