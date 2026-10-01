@@ -8,7 +8,25 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .profile import RuntimeState, Sim2SimProfile
+from .profile import RuntimeState, Sim2SimProfile, dispatch_key
+
+
+_TORCH_THREADS_CONFIGURED = False
+
+
+def _validate_multi_policy_profile(profile: Sim2SimProfile) -> None:
+    required = (
+        "active_policy",
+        "observe_for_policy",
+        "apply_policy_action",
+        "apply_transition_control",
+    )
+    missing = [name for name in required if not callable(getattr(profile, name, None))]
+    if missing:
+        raise TypeError(
+            "A profile with a secondary policy must implement the multi-policy contract: "
+            + ", ".join(missing)
+        )
 
 
 def load_torchscript_policy(path: str | Path, obs_dim: int, action_dim: int, *, policy_name: str = "policy"):
@@ -37,8 +55,14 @@ def run(
     """Run policy inference in real time and optionally render a profile UI."""
     import mujoco
 
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
+    global _TORCH_THREADS_CONFIGURED
+    if not _TORCH_THREADS_CONFIGURED:
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+        _TORCH_THREADS_CONFIGURED = True
+    multi_policy = "secondary" in profile.policies
+    if multi_policy:
+        _validate_multi_policy_profile(profile)
     policies = {
         name: load_torchscript_policy(
             config.checkpoint,
@@ -49,7 +73,6 @@ def run(
         for name, config in profile.policies.items()
     }
     primary_config = profile.policies["primary"]
-    policy = policies["primary"]
     model = profile.build_model()
     data = mujoco.MjData(model)
     state = RuntimeState(command=np.zeros(3), action=np.zeros(primary_config.action_dim))
@@ -85,9 +108,7 @@ def run(
             if key == glfw.KEY_R:
                 profile.reset(model, data, state)
                 return
-            handler = getattr(profile, "handle_key", None)
-            if handler is not None:
-                handler(chr(key).upper(), model, data, state)
+            dispatch_key(profile, chr(key).upper(), model, data, state)
 
         def mouse_callback(win, button, action, mods):
             mouse_button["button"] = button
@@ -126,13 +147,65 @@ def run(
         while headless or not glfw.window_should_close(window):
             if steps > 0 and policy_step >= steps:
                 break
-            observation = np.asarray(profile.observe(model, data, state), dtype=np.float32)
-            if observation.shape != (primary_config.obs_dim,) or not np.isfinite(observation).all():
-                raise ValueError(f"Invalid observation for policy 'primary' at step {policy_step}: shape={observation.shape}")
-            with torch.no_grad():
-                state.action = policy(torch.from_numpy(observation).unsqueeze(0)).numpy().ravel()
+            if multi_policy:
+                active_policy = profile.active_policy(model, data, state)
+                if active_policy is not None and active_policy not in policies:
+                    raise ValueError(
+                        f"Invalid active policy '{active_policy}' at step {policy_step}; "
+                        f"expected one of {tuple(policies)} or None"
+                    )
+            else:
+                active_policy = "primary"
+
+            if active_policy is None:
+                action = None
+            else:
+                config = profile.policies[active_policy]
+                observation_fn = (
+                    profile.observe_for_policy if multi_policy else profile.observe
+                )
+                try:
+                    observation = np.asarray(
+                        observation_fn(model, data, state)
+                        if not multi_policy
+                        else observation_fn(active_policy, model, data, state),
+                        dtype=np.float32,
+                    )
+                except Exception as exc:
+                    raise ValueError(
+                        f"Invalid observation for policy '{active_policy}' at step {policy_step}"
+                    ) from exc
+                if observation.shape != (config.obs_dim,) or not np.isfinite(observation).all():
+                    raise ValueError(
+                        f"Invalid observation for policy '{active_policy}' at step {policy_step}: "
+                        f"shape={observation.shape}"
+                    )
+                try:
+                    with torch.no_grad():
+                        output = policies[active_policy](torch.from_numpy(observation).unsqueeze(0))
+                    action = output.detach().cpu().numpy().ravel()
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Inference failed for policy '{active_policy}' at step {policy_step}"
+                    ) from exc
+                if action.shape != (config.action_dim,):
+                    raise ValueError(
+                        f"Invalid action for policy '{active_policy}' at step {policy_step}: "
+                        f"shape={action.shape}"
+                    )
+                if not np.isfinite(action).all():
+                    raise ValueError(
+                        f"Invalid non-finite action for policy '{active_policy}' at step {policy_step}"
+                    )
+                state.action = action
+
             for _ in range(profile.decimation):
-                profile.apply_action(model, data, state.action, state)
+                if active_policy is None:
+                    profile.apply_transition_control(model, data, state)
+                elif multi_policy:
+                    profile.apply_policy_action(active_policy, model, data, state.action, state)
+                else:
+                    profile.apply_action(model, data, state.action, state)
                 mujoco.mj_step(model, data)
                 fps_physics += 1
             policy_step += 1

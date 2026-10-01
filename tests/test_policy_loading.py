@@ -75,6 +75,12 @@ def test_run_loads_all_policies_before_building_scene(tmp_path, monkeypatch):
             "primary": PolicyConfig(primary, 3, 2),
             "secondary": PolicyConfig(tmp_path / "missing.pt", 5, 2),
         },
+        active_policy=lambda model, data, state: "primary",
+        observe_for_policy=lambda name, model, data, state: torch.zeros(
+            profile.policies[name].obs_dim
+        ).numpy(),
+        apply_policy_action=lambda name, model, data, action, state: None,
+        apply_transition_control=lambda model, data, state: None,
         build_model=lambda: pytest.fail("scene construction must follow actor validation"),
     )
     with pytest.raises(RuntimeError, match="missing.pt"):

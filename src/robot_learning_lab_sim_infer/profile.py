@@ -102,3 +102,14 @@ def resolve_control_parameters(profile: Sim2SimProfile, policy_name: str) -> dic
     if policy_name != "primary":
         resolved.update(profile.policies[policy_name].control_overrides)
     return resolved
+
+
+def dispatch_key(profile: Sim2SimProfile, key: str, model, data, state: RuntimeState) -> None:
+    """Dispatch ordinary profile keys, enabling policy keys only for dual-policy profiles."""
+    handler = getattr(profile, "handle_key", None)
+    if handler is not None:
+        handler(key, model, data, state)
+    if "secondary" in profile.policies:
+        policy_handler = getattr(profile, "handle_policy_key", None)
+        if policy_handler is not None:
+            policy_handler(key, model, data, state)
