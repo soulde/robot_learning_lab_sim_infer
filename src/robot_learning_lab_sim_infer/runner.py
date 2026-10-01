@@ -11,24 +11,24 @@ import torch
 from .profile import RuntimeState, Sim2SimProfile
 
 
-def load_torchscript_policy(path: str | Path, obs_dim: int, action_dim: int):
+def load_torchscript_policy(path: str | Path, obs_dim: int, action_dim: int, *, policy_name: str = "policy"):
+    label = f"policy '{policy_name}' checkpoint {path}"
     try:
         policy = torch.jit.load(str(path), map_location="cpu")
     except (RuntimeError, ValueError) as exc:
-        raise RuntimeError(f"Expected a TorchScript actor: {path}") from exc
+        raise RuntimeError(f"Expected a TorchScript actor for {label}") from exc
     policy.eval()
     with torch.no_grad():
         output = policy(torch.zeros(1, obs_dim, dtype=torch.float32))
     if tuple(output.shape) != (1, action_dim):
-        raise ValueError(f"Policy shape mismatch: expected (1, {action_dim}), got {tuple(output.shape)}")
+        raise ValueError(f"Output shape mismatch for {label}: expected (1, {action_dim}), got {tuple(output.shape)}")
     if not torch.isfinite(output).all():
-        raise ValueError("Policy returned non-finite values during validation")
+        raise ValueError(f"non-finite output during validation for {label}")
     return policy
 
 
 def run(
     profile: Sim2SimProfile,
-    checkpoint: str | Path,
     *,
     headless: bool = False,
     steps: int = 0,
@@ -39,10 +39,20 @@ def run(
 
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    policy = load_torchscript_policy(checkpoint, profile.obs_dim, profile.action_dim)
+    policies = {
+        name: load_torchscript_policy(
+            config.checkpoint,
+            config.obs_dim,
+            config.action_dim,
+            policy_name=name,
+        )
+        for name, config in profile.policies.items()
+    }
+    primary_config = profile.policies["primary"]
+    policy = policies["primary"]
     model = profile.build_model()
     data = mujoco.MjData(model)
-    state = RuntimeState(command=np.zeros(3), action=np.zeros(profile.action_dim))
+    state = RuntimeState(command=np.zeros(3), action=np.zeros(primary_config.action_dim))
     profile.reset(model, data, state)
 
     glfw = window = camera = perturb = option = scene = context = viewport = None
@@ -117,8 +127,8 @@ def run(
             if steps > 0 and policy_step >= steps:
                 break
             observation = np.asarray(profile.observe(model, data, state), dtype=np.float32)
-            if observation.shape != (profile.obs_dim,) or not np.isfinite(observation).all():
-                raise ValueError(f"Invalid observation at step {policy_step}: shape={observation.shape}")
+            if observation.shape != (primary_config.obs_dim,) or not np.isfinite(observation).all():
+                raise ValueError(f"Invalid observation for policy 'primary' at step {policy_step}: shape={observation.shape}")
             with torch.no_grad():
                 state.action = policy(torch.from_numpy(observation).unsqueeze(0)).numpy().ravel()
             for _ in range(profile.decimation):
