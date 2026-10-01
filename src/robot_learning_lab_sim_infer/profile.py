@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import importlib.util
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Protocol
 
 import numpy as np
+
+
+@dataclass(frozen=True)
+class PolicyConfig:
+    checkpoint: str | Path
+    obs_dim: int
+    action_dim: int
+    control_overrides: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -20,8 +29,7 @@ class RuntimeState:
 
 class Sim2SimProfile(Protocol):
     name: str
-    obs_dim: int
-    action_dim: int
+    policies: Mapping[str, PolicyConfig]
     policy_dt: float
     decimation: int
 
@@ -53,8 +61,44 @@ def load_profile(path: str | Path) -> Sim2SimProfile:
     if factory is None:
         raise AttributeError(f"Profile {profile_path} must define create_profile()")
     profile = factory()
-    required = ("name", "obs_dim", "action_dim", "policy_dt", "decimation", "build_model", "reset", "observe", "apply_action")
+    required = ("name", "policy_dt", "decimation", "build_model", "reset", "observe", "apply_action")
     missing = [name for name in required if not hasattr(profile, name)]
     if missing:
         raise TypeError(f"Profile {profile_path} is missing required members: {', '.join(missing)}")
+    policies = getattr(profile, "policies", None)
+    if not isinstance(policies, Mapping) or "primary" not in policies:
+        raise ValueError(f"Profile {profile_path} must define policies with a required 'primary' entry")
+    unknown = set(policies) - {"primary", "secondary"}
+    if unknown:
+        raise ValueError(f"Profile {profile_path} has unknown policy entries: {', '.join(sorted(unknown))}")
+    normalized: dict[str, PolicyConfig] = {}
+    for name, config in policies.items():
+        if not isinstance(config, PolicyConfig):
+            raise TypeError(f"Profile policy '{name}' must be a PolicyConfig")
+        for dim_name in ("obs_dim", "action_dim"):
+            value = getattr(config, dim_name)
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"Profile policy '{name}' {dim_name} must be a positive integer")
+        checkpoint = Path(config.checkpoint).expanduser()
+        if not checkpoint.is_absolute():
+            checkpoint = profile_path.parent / checkpoint
+        overrides = config.control_overrides
+        if not isinstance(overrides, Mapping):
+            raise TypeError(f"Profile policy '{name}' control_overrides must be a mapping")
+        normalized[name] = replace(config, checkpoint=checkpoint.resolve())
+    profile.policies = normalized
+    defaults = getattr(profile, "control_defaults", {})
+    if not isinstance(defaults, Mapping):
+        raise TypeError("Profile control_defaults must be a mapping")
     return profile
+
+
+def resolve_control_parameters(profile: Sim2SimProfile, policy_name: str) -> dict[str, Any]:
+    """Merge defaults, primary overrides, and the selected policy's overrides."""
+    if policy_name not in profile.policies:
+        raise KeyError(f"Unknown policy '{policy_name}'")
+    resolved = dict(getattr(profile, "control_defaults", {}))
+    resolved.update(profile.policies["primary"].control_overrides)
+    if policy_name != "primary":
+        resolved.update(profile.policies[policy_name].control_overrides)
+    return resolved
