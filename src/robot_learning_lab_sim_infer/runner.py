@@ -58,7 +58,11 @@ def run(
     global _TORCH_THREADS_CONFIGURED
     if not _TORCH_THREADS_CONFIGURED:
         torch.set_num_threads(1)
-        torch.set_num_interop_threads(1)
+        try:
+            torch.set_num_interop_threads(1)
+        except RuntimeError:
+            # PyTorch cannot change this after its inter-op pool has started.
+            pass
         _TORCH_THREADS_CONFIGURED = True
     multi_policy = "secondary" in profile.policies
     if multi_policy:

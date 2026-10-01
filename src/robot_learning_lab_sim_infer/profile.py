@@ -35,8 +35,6 @@ class Sim2SimProfile(Protocol):
 
     def build_model(self): ...
     def reset(self, model, data, state: RuntimeState) -> None: ...
-    def observe(self, model, data, state: RuntimeState) -> np.ndarray: ...
-    def apply_action(self, model, data, action: np.ndarray, state: RuntimeState) -> None: ...
 
     def handle_key(self, key: str, model, data, state: RuntimeState) -> bool: ...
 
@@ -61,7 +59,7 @@ def load_profile(path: str | Path) -> Sim2SimProfile:
     if factory is None:
         raise AttributeError(f"Profile {profile_path} must define create_profile()")
     profile = factory()
-    required = ("name", "policy_dt", "decimation", "build_model", "reset", "observe", "apply_action")
+    required = ("name", "policy_dt", "decimation", "build_model", "reset")
     missing = [name for name in required if not hasattr(profile, name)]
     if missing:
         raise TypeError(f"Profile {profile_path} is missing required members: {', '.join(missing)}")
@@ -71,6 +69,13 @@ def load_profile(path: str | Path) -> Sim2SimProfile:
     unknown = set(policies) - {"primary", "secondary"}
     if unknown:
         raise ValueError(f"Profile {profile_path} has unknown policy entries: {', '.join(sorted(unknown))}")
+    if "secondary" not in policies:
+        single_policy_members = ("observe", "apply_action")
+        missing = [name for name in single_policy_members if not callable(getattr(profile, name, None))]
+        if missing:
+            raise TypeError(
+                f"Single-policy profile {profile_path} is missing required members: {', '.join(missing)}"
+            )
     normalized: dict[str, PolicyConfig] = {}
     for name, config in policies.items():
         if not isinstance(config, PolicyConfig):

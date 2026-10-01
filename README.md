@@ -7,7 +7,7 @@
 Profile 模块必须提供 `create_profile()`。每个策略用 `PolicyConfig` 声明权重和输入/输出维度。单策略是只配置 `primary` 的最小形式：
 
 ```python
-from robot_learning_lab_sim_infer.profile import PolicyConfig, resolve_control_parameters
+from robot_learning_lab_sim_infer.profile import PolicyConfig
 
 class Profile:
     policies = {
@@ -28,6 +28,8 @@ def create_profile():
 双策略 profile 再配置 `secondary`，并实现 `active_policy(model, data, state)`、`observe_for_policy(policy_name, ...)`、`apply_policy_action(policy_name, ...)` 和 `apply_transition_control(...)`。回调由 profile 决定当前策略或 transition/ready 阶段；只有声明 `secondary` 后才会启用这些路由和可选的 `handle_policy_key(...)`。
 
 ```python
+from robot_learning_lab_sim_infer.profile import PolicyConfig, resolve_control_parameters
+
 class Profile:
     control_defaults = {"kp_scale": 1.0, "kd_scale": 1.0}
     policies = {

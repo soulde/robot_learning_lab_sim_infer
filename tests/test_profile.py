@@ -20,11 +20,15 @@ def apply_action(model, data, action, state): pass
 """
 
 
-def write_profile(tmp_path: Path, policies: str) -> Path:
+def write_profile(tmp_path: Path, policies: str, *, legacy_callbacks=True) -> Path:
     path = tmp_path / "sim2sim_profile.py"
+    members = PROFILE_MEMBERS
+    if not legacy_callbacks:
+        members = members.replace("def observe(model, data, state): pass\n", "")
+        members = members.replace("def apply_action(model, data, action, state): pass\n", "")
     path.write_text(
         "from robot_learning_lab_sim_infer.profile import PolicyConfig\n"
-        + PROFILE_MEMBERS
+        + members
         + "\ndef create_profile():\n"
         + "    from types import SimpleNamespace\n"
         + f"    policies = {policies}\n"
@@ -84,3 +88,14 @@ def test_single_policy_uses_profile_defaults(tmp_path):
         "kd_scale": 0.8,
         "limit": 4,
     }
+
+
+def test_dual_profile_does_not_require_single_policy_callbacks(tmp_path):
+    path = write_profile(
+        tmp_path,
+        "{'primary': PolicyConfig('stand.pt', 3, 2), "
+        "'secondary': PolicyConfig('track.pt', 5, 2)}",
+        legacy_callbacks=False,
+    )
+    profile = load_profile(path)
+    assert set(profile.policies) == {"primary", "secondary"}

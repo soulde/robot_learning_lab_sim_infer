@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from robot_learning_lab_sim_infer.profile import PolicyConfig, RuntimeState, dispatch_key
+from robot_learning_lab_sim_infer import runner as runner_module
 from robot_learning_lab_sim_infer.runner import run
 
 
@@ -167,3 +168,17 @@ def test_secondary_requires_multi_policy_callbacks_before_scene_creation(tmp_pat
     )
     with pytest.raises(TypeError, match="active_policy"):
         run(profile, headless=True, steps=1)
+
+
+def test_runner_continues_when_torch_interop_pool_is_already_initialized(tmp_path, monkeypatch):
+    checkpoint = save_actor(tmp_path / "primary.pt", 3, 2)
+    profile = SingleProfile(checkpoint)
+    monkeypatch.setattr(runner_module, "_TORCH_THREADS_CONFIGURED", False)
+    monkeypatch.setattr(torch, "set_num_threads", lambda count: None)
+
+    def reject_late_configuration(count):
+        raise RuntimeError("cannot set interop threads after parallel work")
+
+    monkeypatch.setattr(torch, "set_num_interop_threads", reject_late_configuration)
+    run(profile, headless=True, steps=1)
+    assert len(profile.actions) == 1
