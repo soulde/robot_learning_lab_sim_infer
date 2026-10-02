@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
@@ -10,11 +11,18 @@ import torch
 
 from .profile import RuntimeState, Sim2SimProfile, dispatch_key
 
-
 _TORCH_THREADS_CONFIGURED = False
 
 
 def _validate_multi_policy_profile(profile: Sim2SimProfile) -> None:
+    if callable(getattr(profile, "policy_weights", None)):
+        required = ("observe_for_policy", "apply_weighted_policy_actions", "apply_transition_control")
+        missing = [name for name in required if not callable(getattr(profile, name, None))]
+        if missing:
+            raise TypeError(
+                "A weighted multi-policy profile must implement: " + ", ".join(missing)
+            )
+        return
     required = (
         "active_policy",
         "observe_for_policy",
@@ -27,6 +35,46 @@ def _validate_multi_policy_profile(profile: Sim2SimProfile) -> None:
             "A profile with a secondary policy must implement the multi-policy contract: "
             + ", ".join(missing)
         )
+
+
+def _infer_policy_action(profile, policy, policy_name, model, data, state, step):
+    config = profile.policies[policy_name]
+    try:
+        observation = np.asarray(profile.observe_for_policy(policy_name, model, data, state), dtype=np.float32)
+    except Exception as exc:
+        raise ValueError(f"Invalid observation for policy '{policy_name}' at step {step}") from exc
+    if observation.shape != (config.obs_dim,) or not np.isfinite(observation).all():
+        raise ValueError(f"Invalid observation for policy '{policy_name}' at step {step}: shape={observation.shape}")
+    try:
+        with torch.no_grad():
+            output = policy(torch.from_numpy(observation).unsqueeze(0))
+        action = output.detach().cpu().numpy().ravel()
+    except Exception as exc:
+        raise RuntimeError(f"Inference failed for policy '{policy_name}' at step {step}") from exc
+    if action.shape != (config.action_dim,):
+        raise ValueError(f"Invalid action for policy '{policy_name}' at step {step}: shape={action.shape}")
+    if not np.isfinite(action).all():
+        raise ValueError(f"Invalid non-finite action for policy '{policy_name}' at step {step}")
+    return action
+
+
+def _validated_policy_weights(profile, model, data, state, step):
+    weights = profile.policy_weights(model, data, state)
+    if not isinstance(weights, Mapping):
+        raise TypeError(f"policy_weights must return a mapping at step {step}")
+    weights = dict(weights)
+    missing = set(profile.policies) - set(weights)
+    if missing:
+        raise ValueError(f"Missing policy weights at step {step}: {', '.join(sorted(missing))}")
+    unknown = set(weights) - set(profile.policies)
+    if unknown:
+        raise ValueError(f"Unknown policy weights at step {step}: {', '.join(sorted(unknown))}")
+    values = np.asarray(list(weights.values()), dtype=np.float64)
+    if not np.isfinite(values).all() or np.any(values < 0.0):
+        raise ValueError(f"Policy weights must be finite and non-negative at step {step}")
+    if not np.isclose(values.sum(), 1.0, rtol=0.0, atol=1e-6):
+        raise ValueError(f"Policy weights must sum to 1 at step {step}; got {values.sum():.8g}")
+    return weights
 
 
 def load_torchscript_policy(path: str | Path, obs_dim: int, action_dim: int, *, policy_name: str = "policy"):
@@ -65,6 +113,7 @@ def run(
             pass
         _TORCH_THREADS_CONFIGURED = True
     multi_policy = "secondary" in profile.policies
+    weighted_multi_policy = multi_policy and callable(getattr(profile, "policy_weights", None))
     if multi_policy:
         _validate_multi_policy_profile(profile)
     policies = {
@@ -151,7 +200,14 @@ def run(
         while headless or not glfw.window_should_close(window):
             if steps > 0 and policy_step >= steps:
                 break
-            if multi_policy:
+            if weighted_multi_policy:
+                policy_weights = _validated_policy_weights(profile, model, data, state, policy_step)
+                policy_actions = {
+                    name: _infer_policy_action(profile, policies[name], name, model, data, state, policy_step)
+                    for name in policy_weights
+                }
+                active_policy = "weighted" if policy_weights else None
+            elif multi_policy:
                 active_policy = profile.active_policy(model, data, state)
                 if active_policy is not None and active_policy not in policies:
                     raise ValueError(
@@ -161,7 +217,7 @@ def run(
             else:
                 active_policy = "primary"
 
-            if active_policy is None:
+            if active_policy is None or weighted_multi_policy:
                 action = None
             else:
                 config = profile.policies[active_policy]
@@ -204,7 +260,11 @@ def run(
                 state.action = action
 
             for _ in range(profile.decimation):
-                if active_policy is None:
+                if weighted_multi_policy and policy_weights:
+                    profile.apply_weighted_policy_actions(
+                        model, data, policy_actions, policy_weights, state
+                    )
+                elif active_policy is None:
                     profile.apply_transition_control(model, data, state)
                 elif multi_policy:
                     profile.apply_policy_action(active_policy, model, data, state.action, state)

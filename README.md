@@ -27,6 +27,8 @@ def create_profile():
 
 双策略 profile 再配置 `secondary`，并实现 `active_policy(model, data, state)`、`observe_for_policy(policy_name, ...)`、`apply_policy_action(policy_name, ...)` 和 `apply_transition_control(...)`。回调由 profile 决定当前策略或 transition/ready 阶段；只有声明 `secondary` 后才会启用这些路由和可选的 `handle_policy_key(...)`。
 
+如果需要在策略切换期间并行推理并连续融合输出，profile 可以改用加权接口：实现 `policy_weights(model, data, state) -> Mapping[str, float]` 和 `apply_weighted_policy_actions(model, data, actions, weights, state)`，同时保留 `observe_for_policy(...)` 与 `apply_transition_control(...)`。权重必须有限、非负且总和为 1；runner 会对权重映射中列出的每个 actor 都执行推理，包括当前权重为 0 的 actor。这样 profile 可以用同一平滑进度融合 actor 输出及机器人专属控制参数，而无需把机器人控制语义放进 runner。
+
 ```python
 from robot_learning_lab_sim_infer.profile import PolicyConfig, resolve_control_parameters
 

@@ -7,7 +7,6 @@ import torch
 from robot_learning_lab_sim_infer.profile import PolicyConfig
 from robot_learning_lab_sim_infer.runner import run
 
-
 XML = "<mujoco><worldbody><body pos='0 0 1'><freejoint/><geom type='sphere' size='0.1'/></body></worldbody></mujoco>"
 
 

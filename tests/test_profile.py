@@ -2,8 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from robot_learning_lab_sim_infer.profile import PolicyConfig, load_profile, resolve_control_parameters
-
+from robot_learning_lab_sim_infer.profile import (
+    load_profile,
+    resolve_control_parameters,
+)
 
 PROFILE_MEMBERS = """
 name = 'fixture'
