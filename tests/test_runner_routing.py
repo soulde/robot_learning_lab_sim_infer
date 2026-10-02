@@ -140,64 +140,13 @@ def test_dual_policy_routes_distinct_actor_shapes_and_transition(tmp_path):
     assert profile.transitions == 1
 
 
-def test_weighted_dual_policy_infers_both_actors_and_routes_blend_weights(tmp_path):
+def test_simultaneous_policy_inference_contract_is_not_supported(tmp_path):
     primary = save_actor(tmp_path / "primary.pt", 3, 2)
     secondary = save_actor(tmp_path / "secondary.pt", 5, 3)
-    profile = WeightedDualProfile(
-        primary,
-        secondary,
-        [
-            {"primary": 1.0, "secondary": 0.0},
-            {"primary": 0.25, "secondary": 0.75},
-        ],
-    )
+    profile = WeightedDualProfile(primary, secondary, [{"primary": 0.5, "secondary": 0.5}])
 
-    run(profile, headless=True, steps=2)
-
-    assert profile.observed == ["primary", "secondary", "primary", "secondary"]
-    assert [set(actions) for actions, _ in profile.blends] == [
-        {"primary", "secondary"},
-        {"primary", "secondary"},
-    ]
-    assert [weights for _, weights in profile.blends] == [
-        {"primary": 1.0, "secondary": 0.0},
-        {"primary": 0.25, "secondary": 0.75},
-    ]
-
-
-def test_weighted_dual_policy_rejects_weights_that_do_not_sum_to_one(tmp_path):
-    primary = save_actor(tmp_path / "primary.pt", 3, 2)
-    secondary = save_actor(tmp_path / "secondary.pt", 5, 3)
-    profile = WeightedDualProfile(primary, secondary, [{"primary": 0.2, "secondary": 0.2}])
-
-    with pytest.raises(ValueError, match="weights must sum to 1"):
+    with pytest.raises(TypeError, match="active_policy"):
         run(profile, headless=True, steps=1)
-    assert profile.blends == []
-
-
-@pytest.mark.parametrize("weights", [{"primary": 1.0}])
-def test_weighted_dual_policy_requires_weights_for_every_actor(tmp_path, weights):
-    primary = save_actor(tmp_path / "primary.pt", 3, 2)
-    secondary = save_actor(tmp_path / "secondary.pt", 5, 3)
-    profile = WeightedDualProfile(primary, secondary, [weights])
-
-    with pytest.raises(ValueError, match="Missing policy weights"):
-        run(profile, headless=True, steps=1)
-
-    assert profile.observed == []
-    assert profile.blends == []
-
-
-def test_weighted_dual_policy_allows_empty_weights_for_transition_control(tmp_path):
-    primary = save_actor(tmp_path / "primary.pt", 3, 2)
-    secondary = save_actor(tmp_path / "secondary.pt", 5, 3)
-    profile = WeightedDualProfile(primary, secondary, [{}])
-
-    run(profile, headless=True, steps=1)
-
-    assert profile.observed == []
-    assert profile.blends == []
-    assert profile.transitions == 1
 
 
 def test_unknown_active_policy_is_rejected_before_action(tmp_path):
