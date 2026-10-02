@@ -63,6 +63,9 @@ def _validated_policy_weights(profile, model, data, state, step):
     if not isinstance(weights, Mapping):
         raise TypeError(f"policy_weights must return a mapping at step {step}")
     weights = dict(weights)
+    # An empty mapping explicitly hands control to apply_transition_control.
+    if not weights:
+        return weights
     missing = set(profile.policies) - set(weights)
     if missing:
         raise ValueError(f"Missing policy weights at step {step}: {', '.join(sorted(missing))}")

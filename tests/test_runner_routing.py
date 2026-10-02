@@ -175,7 +175,7 @@ def test_weighted_dual_policy_rejects_weights_that_do_not_sum_to_one(tmp_path):
     assert profile.blends == []
 
 
-@pytest.mark.parametrize("weights", [{}, {"primary": 1.0}])
+@pytest.mark.parametrize("weights", [{"primary": 1.0}])
 def test_weighted_dual_policy_requires_weights_for_every_actor(tmp_path, weights):
     primary = save_actor(tmp_path / "primary.pt", 3, 2)
     secondary = save_actor(tmp_path / "secondary.pt", 5, 3)
@@ -186,6 +186,18 @@ def test_weighted_dual_policy_requires_weights_for_every_actor(tmp_path, weights
 
     assert profile.observed == []
     assert profile.blends == []
+
+
+def test_weighted_dual_policy_allows_empty_weights_for_transition_control(tmp_path):
+    primary = save_actor(tmp_path / "primary.pt", 3, 2)
+    secondary = save_actor(tmp_path / "secondary.pt", 5, 3)
+    profile = WeightedDualProfile(primary, secondary, [{}])
+
+    run(profile, headless=True, steps=1)
+
+    assert profile.observed == []
+    assert profile.blends == []
+    assert profile.transitions == 1
 
 
 def test_unknown_active_policy_is_rejected_before_action(tmp_path):
