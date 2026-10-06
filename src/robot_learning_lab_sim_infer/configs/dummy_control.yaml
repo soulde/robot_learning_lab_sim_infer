@@ -1,0 +1,27 @@
+dds:
+  domain_id: 23
+  cyclonedds_uri: null
+  state_topic: robot/state
+  rc_topic: robot/rc_command
+  motor_command_topic: robot/motor_command
+  state_timeout_s: 0.25
+  rc_timeout_s: 0.5
+  motor_command_timeout_s: 0.1
+  publish_hz: 100.0
+
+control:
+  rate_hz: 50.0
+  log_hz: 2.0
+  damping_kd: 0.5
+  policies:
+    - index: 1
+      name: policy_1
+      # Set to the policy checkpoint when replacing the observe/infer stub.
+      policy_file: null
+      kp: 12.0
+      kd: 0.8
+    - index: 2
+      name: policy_2
+      policy_file: null
+      kp: 20.0
+      kd: 1.2

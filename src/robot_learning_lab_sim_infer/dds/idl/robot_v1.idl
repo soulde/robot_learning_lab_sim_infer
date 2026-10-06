@@ -1,0 +1,47 @@
+module robot_learning_lab_sim_infer {
+  module msg {
+    module v1 {
+      // All timestamps are Unix epoch nanoseconds. Length units are metres,
+      // angles are radians, angular rates are rad/s, and forces are newtons.
+      struct RobotState {
+        unsigned long long timestamp_ns;
+        sequence<string<64>, 64> joint_names;
+        sequence<double, 64> joint_position;
+        sequence<double, 64> joint_velocity;
+        sequence<double, 64> joint_effort;
+        double base_position[3];
+        double base_orientation_xyzw[4];
+        double base_linear_velocity[3];
+        double base_angular_velocity[3];
+        double imu_orientation_xyzw[4];
+        double imu_angular_velocity[3];
+        double imu_linear_acceleration[3];
+        sequence<double, 256> contact_force_xyz;
+      };
+
+      struct RCCommand {
+        unsigned long long timestamp_ns;
+        boolean enabled;
+        unsigned short mode;
+        float vx;
+        float vy;
+        float yaw_rate;
+        float body_height;
+        unsigned long button_mask;
+      };
+
+      enum MotorControlMode { POSITION, VELOCITY, TORQUE, MIT };
+
+      struct MotorCommand {
+        unsigned long long timestamp_ns;
+        MotorControlMode control_mode;
+        sequence<string<64>, 64> joint_names;
+        sequence<double, 64> position;
+        sequence<double, 64> velocity;
+        sequence<double, 64> kp;
+        sequence<double, 64> kd;
+        sequence<double, 64> torque;
+      };
+    };
+  };
+};

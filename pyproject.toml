@@ -9,8 +9,16 @@ dependencies = [
     "torch>=2.0,<3",
 ]
 
+[project.optional-dependencies]
+dds = ["cyclonedds>=0.10"]
+viser = ["viser>=0.2"]
+sim-hardware = ["cyclonedds>=0.10", "hydra-core>=1.3,<2", "mjviser>=0.0.14"]
+
 [project.scripts]
 robot-learning-lab-sim-infer = "robot_learning_lab_sim_infer.main:main"
+rll-sim-hardware = "robot_learning_lab_sim_infer.nodes.sim_hardware_node:main"
+rll-policy = "robot_learning_lab_sim_infer.nodes.policy_node:main"
+rll-dummy-control = "robot_learning_lab_sim_infer.nodes.dummy_control_node:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -18,3 +26,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+robot_learning_lab_sim_infer = ["configs/*.yaml", "dds/idl/*.idl", "assets/dr02_motor/*.xml", "assets/dr02_motor/*.md", "assets/dr02_motor/meshes/*.STL"]
