@@ -2,3 +2,6 @@
 __pycache__/
 MUJOCO_LOG.TXT
 /build-cpp/
+
+# Local native policy configuration
+/cpp/config/*.yaml
