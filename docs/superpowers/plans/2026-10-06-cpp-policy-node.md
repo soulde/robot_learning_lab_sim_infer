@@ -94,12 +94,12 @@
 - `InferenceEngine::load_models(configs, device)` loads each `torch::jit::Module`, calls `eval()`, and validates a `[1, observation_dim]` zero-input probe returns a finite float tensor shaped `[1, action_dim]`.
 - `InferenceEngine::infer(policy_name, observation) -> torch::Tensor` runs one no-gradient forward and enforces the same input/output contract.
 
-- [ ] **Step 1: Write failing tests** for real TorchScript loading, expected output values, multiple models with different input/output sizes, missing/corrupt checkpoints, tuple output, wrong input/output shape, non-finite input/output, and unavailable configured device.
-- [ ] **Step 2: Run the focused CTest** and confirm the missing inference implementation causes expected failures.
-- [ ] **Step 3: Add the fixture generator** that writes small traced TorchScript models with deterministic nonzero outputs for tests only.
-- [ ] **Step 4: Implement `InferenceEngine`** with `torch::jit::load`, device transfer, evaluation mode, no-grad inference, and explicit errors naming the policy/checkpoint.
-- [ ] **Step 5: Run `ctest --test-dir build-cpp -R inference_engine --output-on-failure`**; expected: all valid and invalid model contract cases pass.
-- [ ] **Step 6: Commit** as `feat: run TorchScript policies through LibTorch`.
+- [x] **Step 1: Write failing tests** for real TorchScript loading, expected output values, multiple models with different input/output sizes, missing/corrupt checkpoints, tuple output, wrong input/output shape, non-finite input/output, and unavailable configured device.
+- [x] **Step 2: Run the focused CTest** and confirm the missing inference implementation causes expected failures.
+- [x] **Step 3: Add the fixture generator** that writes small traced TorchScript models with deterministic nonzero outputs for tests only.
+- [x] **Step 4: Implement `InferenceEngine`** with `torch::jit::load`, device transfer, evaluation mode, no-grad inference, and explicit errors naming the policy/checkpoint.
+- [x] **Step 5: Run `ctest --test-dir build-cpp -R inference_engine --output-on-failure`**; expected: all valid and invalid model contract cases pass.
+- [x] **Step 6: Commit** as `feat: run TorchScript policies through LibTorch`.
 
 ### Task 4: YAML runtime config, DDS loop, FSM and smooth command transitions
 
@@ -162,3 +162,20 @@
 - The current host has LibTorch CMake files in the Isaac Lab EA Python environment, but the Cyclone DDS runtime development header/library pair was not found under `/usr`; implementation must locate an installed Cyclone DDS development package before building and must not silently use the unrelated private `pico_dds_bridge` build path.
 - The test TorchScript fixture is generated locally from installed PyTorch and is never a production fallback or bundled model.
 - Live DDS testing requires network-interface access. Run only after the ordinary CMake/CTest checks pass, and request sandbox escalation if Cyclone DDS cannot enumerate interfaces inside the sandbox.
+
+### Task 6: Integrate the Chocolate velocity and whole-body tracking policies
+
+**Files:**
+- Create a Chocolate C++ robot plugin implementing both policies' exact observation and named action mapping.
+- Create a small offline converter for the existing tracking `.npz` reference into a versioned runtime binary file; do not check in the motion dataset or checkpoints.
+- Create a Chocolate policy YAML example referencing both exported TorchScript checkpoints and the generated motion reference.
+- Create plugin contract tests for both observation layouts (78 and 124 values), action history, mode transitions, joint order, and `0.5` action-scale position commands.
+- Modify the top-level README with Chocolate build, conversion, and run instructions.
+
+**Source of truth:** `/home/jvwei/chocolate_training/sim2sim_profile.py`, Chocolate joint manifest/control profile, existing simulator DDS state contract, and the Chocolate velocity/tracking TorchScript checkpoints. The sample selects velocity on mode 1 and tracking on mode 2; runtime output blending remains owned by the generic C++ coordinator.
+
+- [ ] **Step 1: Capture Chocolate joint orders, scales, gains, default pose, observation terms, and checkpoint contracts in a failing plugin contract test.**
+- [ ] **Step 2: Implement the Chocolate plugin and offline motion converter; verify both models against the C++ inference API.**
+- [ ] **Step 3: Add the Chocolate YAML example and user-facing invocation; keep model and motion files external.**
+- [ ] **Step 4: Run Chocolate plugin contracts and a headless DDS integration smoke test.**
+- [ ] **Step 5: Commit** as `feat: add Chocolate tracking policy example`.

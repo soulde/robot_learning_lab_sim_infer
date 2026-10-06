@@ -9,6 +9,7 @@ find_package(CycloneDDS REQUIRED)
 find_package(Torch REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_program(IDLC_EXECUTABLE idlc REQUIRED)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 separate_arguments(TORCH_CXX_FLAGS_LIST NATIVE_COMMAND "${TORCH_CXX_FLAGS}")
 add_compile_options(${TORCH_CXX_FLAGS_LIST})
 
@@ -29,6 +30,10 @@ target_link_libraries(rll_policy_messages PRIVATE robot_v1_types)
 add_library(rll_policy_plugin_loader STATIC src/plugin_loader.cpp)
 target_include_directories(rll_policy_plugin_loader PUBLIC include ${TORCH_INCLUDE_DIRS})
 target_link_libraries(rll_policy_plugin_loader PUBLIC rll_policy_messages ${TORCH_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_library(rll_policy_inference STATIC src/inference_engine.cpp)
+target_include_directories(rll_policy_inference PUBLIC include ${TORCH_INCLUDE_DIRS})
+target_link_libraries(rll_policy_inference PUBLIC ${TORCH_LIBRARIES})
 
 add_executable(rll-policy src/main.cpp)
 target_link_libraries(rll-policy PRIVATE rll_policy_messages)
@@ -55,4 +60,19 @@ if(BUILD_TESTING)
   add_test(NAME plugin_loader_test COMMAND plugin_loader_test
     "$<TARGET_FILE:test_robot_plugin>" "$<TARGET_FILE:missing_symbols_plugin>" "$<TARGET_FILE:wrong_abi_plugin>"
     "${CMAKE_CURRENT_BINARY_DIR}/does-not-exist.so")
+
+  set(FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/fixtures")
+  set(FIXTURE_FILES
+    "${FIXTURE_DIR}/velocity.pt" "${FIXTURE_DIR}/tracking.pt" "${FIXTURE_DIR}/tuple.pt"
+    "${FIXTURE_DIR}/wrong_shape.pt" "${FIXTURE_DIR}/wrong_dtype.pt" "${FIXTURE_DIR}/non_finite.pt"
+    "${FIXTURE_DIR}/corrupt.pt")
+  add_custom_command(OUTPUT ${FIXTURE_FILES}
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/make_torchscript_fixture.py" "${FIXTURE_DIR}"
+    DEPENDS tests/fixtures/make_torchscript_fixture.py VERBATIM)
+  add_custom_target(inference_fixtures DEPENDS ${FIXTURE_FILES})
+  add_executable(inference_engine_test tests/inference_engine_test.cpp)
+  target_include_directories(inference_engine_test PRIVATE ${TORCH_INCLUDE_DIRS})
+  target_link_libraries(inference_engine_test PRIVATE rll_policy_inference)
+  add_dependencies(inference_engine_test inference_fixtures)
+  add_test(NAME inference_engine_test COMMAND inference_engine_test "${FIXTURE_DIR}")
 endif()
