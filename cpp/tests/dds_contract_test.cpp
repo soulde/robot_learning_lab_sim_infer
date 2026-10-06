@@ -1,6 +1,7 @@
 #include "rll_policy/detail/dds_messages.hpp"
 
 #include <cassert>
+#include <algorithm>
 #include <stdexcept>
 
 int main() {
@@ -23,6 +24,12 @@ int main() {
   assert(state_roundtrip.joint_position == state.joint_position);
   assert(state_roundtrip.contact_force_xyz == state.contact_force_xyz);
   robot_learning_lab_sim_infer_msg_v1_RobotState_free(&state_idl, DDS_FREE_CONTENTS);
+  auto malformed_state=to_idl(state);
+  std::fill_n(malformed_state.joint_names._buffer[0],65,'x');
+  bool malformed_rejected=false;
+  try { (void)from_idl(malformed_state); } catch (const std::invalid_argument&) { malformed_rejected=true; }
+  robot_learning_lab_sim_infer_msg_v1_RobotState_free(&malformed_state,DDS_FREE_CONTENTS);
+  assert(malformed_rejected);
 
   RCCommand rc;
   rc.timestamp_ns = 99;

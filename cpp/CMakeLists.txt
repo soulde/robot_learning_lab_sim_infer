@@ -35,8 +35,12 @@ add_library(rll_policy_inference STATIC src/inference_engine.cpp)
 target_include_directories(rll_policy_inference PUBLIC include ${TORCH_INCLUDE_DIRS})
 target_link_libraries(rll_policy_inference PUBLIC ${TORCH_LIBRARIES})
 
+add_library(rll_policy_runtime STATIC src/config.cpp src/runtime_utils.cpp src/dds_transport.cpp)
+target_include_directories(rll_policy_runtime PUBLIC include PRIVATE "${GENERATED_DIR}")
+target_link_libraries(rll_policy_runtime PUBLIC rll_policy_inference rll_policy_messages yaml-cpp CycloneDDS::ddsc)
+
 add_executable(rll-policy src/main.cpp)
-target_link_libraries(rll-policy PRIVATE rll_policy_messages)
+target_link_libraries(rll-policy PRIVATE rll_policy_plugin_loader rll_policy_runtime)
 
 include(CTest)
 if(BUILD_TESTING)
@@ -75,4 +79,11 @@ if(BUILD_TESTING)
   target_link_libraries(inference_engine_test PRIVATE rll_policy_inference)
   add_dependencies(inference_engine_test inference_fixtures)
   add_test(NAME inference_engine_test COMMAND inference_engine_test "${FIXTURE_DIR}")
+
+  add_executable(policy_runtime_test tests/policy_runtime_test.cpp)
+  target_link_libraries(policy_runtime_test PRIVATE rll_policy_runtime)
+  add_test(NAME policy_runtime_test COMMAND policy_runtime_test "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/runtime.yaml")
+  add_test(NAME native_sim_interop COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/native_sim_interop_test.py"
+    --binary "$<TARGET_FILE:rll-policy>" --python "${Python3_EXECUTABLE}")
 endif()

@@ -21,7 +21,7 @@ void set_double_seq(dds_sequence_double& out, const std::vector<double>& in) {
   out._buffer = in.empty() ? nullptr : dds_sequence_double_allocbuf(in.size());
   if (!in.empty() && !out._buffer) throw std::bad_alloc();
   out._release = true;
-  std::copy(in.begin(), in.end(), out._buffer);
+  if (!in.empty()) std::copy(in.begin(), in.end(), out._buffer);
 }
 void set_names(dds_sequence_string64& out, const std::vector<std::string>& in) {
   out._maximum = static_cast<std::uint32_t>(in.size()); out._length = out._maximum;
@@ -31,14 +31,20 @@ void set_names(dds_sequence_string64& out, const std::vector<std::string>& in) {
   for (std::size_t i = 0; i < in.size(); ++i) std::memcpy(out._buffer[i], in[i].c_str(), in[i].size() + 1);
 }
 std::vector<double> read_seq(const dds_sequence_double& seq) {
+  if (seq._length > seq._maximum) throw std::invalid_argument("IDL sequence length exceeds its allocation");
   if (seq._length && !seq._buffer) throw std::invalid_argument("IDL sequence has null buffer");
   if (!seq._length) return {};
   return {seq._buffer, seq._buffer + seq._length};
 }
 std::vector<std::string> read_names(const dds_sequence_string64& seq) {
+  if (seq._length > seq._maximum) throw std::invalid_argument("IDL joint-name length exceeds its allocation");
   if (seq._length && !seq._buffer) throw std::invalid_argument("IDL sequence has null buffer");
   std::vector<std::string> names; names.reserve(seq._length);
-  for (std::uint32_t i = 0; i < seq._length; ++i) names.emplace_back(seq._buffer[i]);
+  for (std::uint32_t i = 0; i < seq._length; ++i) {
+    const char* begin=seq._buffer[i]; const char* end=std::find(begin,begin+65,'\0');
+    if (end==begin+65) throw std::invalid_argument("IDL joint name is not NUL-terminated within its bound");
+    names.emplace_back(begin,end);
+  }
   return names;
 }
 template <std::size_t N> void read_array(std::array<double, N>& out, const double (&in)[N]) {
@@ -54,14 +60,15 @@ robot_learning_lab_sim_infer_msg_v1_RobotState to_idl(const RobotState& v) {
   check_size<64>(v.joint_velocity, "joint_velocity"); check_size<64>(v.joint_effort, "joint_effort");
   check_size<256>(v.contact_force_xyz, "contact_force_xyz");
   robot_learning_lab_sim_infer_msg_v1_RobotState out{};
-  out.timestamp_ns = v.timestamp_ns; set_names(out.joint_names, v.joint_names);
-  set_double_seq(out.joint_position, v.joint_position);
-  set_double_seq(out.joint_velocity, v.joint_velocity);
-  set_double_seq(out.joint_effort, v.joint_effort);
-  write_array(out.base_position, v.base_position); write_array(out.base_orientation_xyzw, v.base_orientation_xyzw);
-  write_array(out.base_linear_velocity, v.base_linear_velocity); write_array(out.base_angular_velocity, v.base_angular_velocity);
-  write_array(out.imu_orientation_xyzw, v.imu_orientation_xyzw); write_array(out.imu_angular_velocity, v.imu_angular_velocity);
-  write_array(out.imu_linear_acceleration, v.imu_linear_acceleration); set_double_seq(out.contact_force_xyz, v.contact_force_xyz);
+  try {
+    out.timestamp_ns = v.timestamp_ns; set_names(out.joint_names, v.joint_names);
+    set_double_seq(out.joint_position, v.joint_position); set_double_seq(out.joint_velocity, v.joint_velocity);
+    set_double_seq(out.joint_effort, v.joint_effort);
+    write_array(out.base_position, v.base_position); write_array(out.base_orientation_xyzw, v.base_orientation_xyzw);
+    write_array(out.base_linear_velocity, v.base_linear_velocity); write_array(out.base_angular_velocity, v.base_angular_velocity);
+    write_array(out.imu_orientation_xyzw, v.imu_orientation_xyzw); write_array(out.imu_angular_velocity, v.imu_angular_velocity);
+    write_array(out.imu_linear_acceleration, v.imu_linear_acceleration); set_double_seq(out.contact_force_xyz, v.contact_force_xyz);
+  } catch (...) { robot_learning_lab_sim_infer_msg_v1_RobotState_free(&out,DDS_FREE_CONTENTS); throw; }
   return out;
 }
 RobotState from_idl(const robot_learning_lab_sim_infer_msg_v1_RobotState& v) {
@@ -85,11 +92,15 @@ robot_learning_lab_sim_infer_msg_v1_MotorCommand to_idl(const MotorCommand& v) {
   check_names<64>(v.joint_names); check_size<64>(v.position,"position"); check_size<64>(v.velocity,"velocity");
   check_size<64>(v.kp,"kp"); check_size<64>(v.kd,"kd"); check_size<64>(v.torque,"torque");
   robot_learning_lab_sim_infer_msg_v1_MotorCommand out{};
-  out.timestamp_ns=v.timestamp_ns; out.control_mode=static_cast<robot_learning_lab_sim_infer_msg_v1_MotorControlMode>(v.control_mode);
-  set_names(out.joint_names,v.joint_names); set_double_seq(out.position,v.position); set_double_seq(out.velocity,v.velocity);
-  set_double_seq(out.kp,v.kp); set_double_seq(out.kd,v.kd); set_double_seq(out.torque,v.torque); return out;
+  try {
+    out.timestamp_ns=v.timestamp_ns; out.control_mode=static_cast<robot_learning_lab_sim_infer_msg_v1_MotorControlMode>(v.control_mode);
+    set_names(out.joint_names,v.joint_names); set_double_seq(out.position,v.position); set_double_seq(out.velocity,v.velocity);
+    set_double_seq(out.kp,v.kp); set_double_seq(out.kd,v.kd); set_double_seq(out.torque,v.torque); return out;
+  } catch (...) { robot_learning_lab_sim_infer_msg_v1_MotorCommand_free(&out,DDS_FREE_CONTENTS); throw; }
 }
 MotorCommand from_idl(const robot_learning_lab_sim_infer_msg_v1_MotorCommand& v) {
+  if (v.joint_names._length>64 || v.position._length>64 || v.velocity._length>64 || v.kp._length>64 || v.kd._length>64 || v.torque._length>64)
+    throw std::invalid_argument("MotorCommand exceeds IDL sequence bounds");
   if (v.control_mode < robot_learning_lab_sim_infer_msg_v1_POSITION || v.control_mode > robot_learning_lab_sim_infer_msg_v1_MIT) throw std::invalid_argument("invalid MotorControlMode");
   MotorCommand out; out.timestamp_ns=v.timestamp_ns; out.control_mode=static_cast<MotorControlMode>(v.control_mode);
   out.joint_names=read_names(v.joint_names); out.position=read_seq(v.position); out.velocity=read_seq(v.velocity);

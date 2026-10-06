@@ -122,15 +122,15 @@
 - `native_sim_interop_test.py` launches a small Python helper that runs the existing `SimHardwareNode` headless with enabled test RC values, plus the native C++ node and a motor-command probe as separate processes.
 - `main` owns the procedural loop and lifecycle; no fourth processing class is added.
 
-- [ ] **Step 1: Write failing runtime tests** for configured FSM events, mode 0 damping (`kp=0`, configured `kd`), configured/unknown mode selection, stale/disabled input withholding, joint-name reordering by name, duplicate/missing names and vector-length rejection, matching-name output blending, policy-to-damping interpolation, and a new switch during an active transition starting from the last emitted command.
-- [ ] **Step 2: Run the focused CTest** and confirm the runtime cases fail because config/DDS scheduling/state selection do not exist.
-- [ ] **Step 3: Implement YAML parsing and config validation**; reject missing fields, invalid rates/timeouts, duplicate policy indices, invalid dimensions/gains, and mode mappings to absent slots.
-- [ ] **Step 4: Implement the Cyclone DDS C reader/writer transport** using the generated C types and QoS compatible with the Python simulator's latest-value sensor/RC and reliable motor-command endpoints.
-- [ ] **Step 5: Implement the policy loop and transition blending**; use the plugin to build policy-specific observations and per-policy motor commands, then interpolate position, velocity, torque, Kp, and Kd by joint name.
-- [ ] **Step 6: Run `ctest --test-dir build-cpp -R policy_runtime --output-on-failure`**; expected: state machine, freshness, damping, policy inference routing, and transition tests pass.
-- [ ] **Step 7: Add the Python simulator helper and native interop test**; the helper constructs the real `SimHardwareNode`, sets `RCValues(enabled=True, mode=1)`, disables rendering, and runs in its own process; the test probes published motor commands.
-- [ ] **Step 8: Run the native sim interop test** on a dedicated DDS domain; expected: Python sensor/RC samples reach C++, actual TorchScript inference runs, and a nonzero named motor command returns to the simulator.
-- [ ] **Step 9: Commit** as `feat: add native DDS policy runtime`.
+- [x] **Step 1: Write failing runtime tests** for configured FSM events, mode 0 damping (`kp=0`, configured `kd`), configured/unknown mode selection, stale/disabled input withholding, joint-name reordering by name, duplicate/missing names and vector-length rejection, matching-name output blending, policy-to-damping interpolation, and a new switch during an active transition starting from the last emitted command.
+- [x] **Step 2: Run the focused CTest** and confirm the runtime cases fail because config/DDS scheduling/state selection do not exist.
+- [x] **Step 3: Implement YAML parsing and config validation**; reject missing fields, invalid rates/timeouts, duplicate policy indices, invalid dimensions/gains, and mode mappings to absent slots.
+- [x] **Step 4: Implement the Cyclone DDS C reader/writer transport** using the generated C types and QoS compatible with the Python simulator's latest-value sensor/RC and reliable motor-command endpoints.
+- [x] **Step 5: Implement the policy loop and transition blending**; use the plugin to build policy-specific observations and per-policy motor commands, then interpolate position, velocity, torque, Kp, and Kd by joint name.
+- [x] **Step 6: Run `ctest --test-dir build-cpp -R policy_runtime --output-on-failure`**; expected: state machine, freshness, damping, policy inference routing, and transition tests pass.
+- [x] **Step 7: Add the Python simulator helper and native interop test**; the helper constructs the real `SimHardwareNode`, sets `RCValues(enabled=True, mode=1)`, disables rendering, and runs in its own process; the test probes published motor commands.
+- [x] **Step 8: Run the native sim interop test** on a dedicated DDS domain; expected: Python sensor/RC samples reach C++, actual TorchScript inference runs, and a nonzero named motor command returns to the simulator.
+- [x] **Step 9: Commit** as `feat: add native DDS policy runtime`.
 
 ### Task 5: Replace the Python policy entry point and verify sim interoperability
 

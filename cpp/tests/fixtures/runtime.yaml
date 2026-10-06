@@ -1,0 +1,43 @@
+dds:
+  domain_id: 23
+  state_topic: robot/state
+  rc_topic: robot/rc_command
+  motor_command_topic: robot/motor_command
+  sensor_reliability: best_effort
+  command_reliability: reliable
+timing:
+  policy_hz: 50.0
+  state_timeout_s: 0.25
+  rc_timeout_s: 0.5
+  transition_duration_s: 0.5
+device: cpu
+plugin:
+  path: ./robot.so
+  config: ./robot.yaml
+damping:
+  kd: 0.7
+policies:
+  - index: 1
+    name: velocity
+    checkpoint: ./velocity.pt
+    observation_dim: 3
+    action_dim: 2
+  - index: 2
+    name: tracking
+    checkpoint: ./tracking.pt
+    observation_dim: 5
+    action_dim: 4
+state_machine:
+  initial_state: damping
+  states:
+    damping:
+      policy: null
+      transitions: {mode_damping: damping, mode_velocity: velocity, mode_tracking: tracking, play: velocity}
+    velocity:
+      policy: velocity
+      transitions: {mode_damping: damping, mode_velocity: velocity, mode_tracking: tracking, play: velocity}
+    tracking:
+      policy: tracking
+      transitions: {mode_damping: damping, mode_velocity: velocity, mode_tracking: tracking, play: velocity}
+  mode_events: {0: mode_damping, 1: mode_velocity, 2: mode_tracking}
+  button_events: {2: play}
