@@ -129,3 +129,41 @@ Dummy 节点每 50 Hz 读取最新状态和遥控器数据并打印观测，按 
 ```bash
 rll-dummy-control dds.domain_id=23 control.rate_hz=50 control.damping_kd=0.5
 ```
+
+### Chocolate velocity and whole-body tracking
+
+The Chocolate example uses the native C++ plugin for both exported TorchScript actors. Mode `1` selects the 78-value velocity policy; mode `2` selects the 124-value whole-body tracking policy. The plugin uses the Chocolate canonical/tracking joint orders, default pose, gain profile, `0.5` action scale, previous-action histories, and torso-relative reference features. Generic runtime transition blending controls the command handoff. Reference playback starts when mode 2 is selected and advances at the motion file's 50 Hz rate.
+
+The two exported weights and the LAFAN reference remain external. Convert the reference archive into the small versioned runtime format (header plus per-frame tracking-order joint position/velocity and torso pose):
+
+```bash
+source ~/env_isaaclab_ea/bin/activate
+python tools/convert_chocolate_motion.py \\
+  ~/datasets/lafan1_retargeted/chocolate_dance2_subject1_50hz_20261001_manual_offsets/npz50/dance2_subject1.npz \\
+  ~/datasets/lafan1_retargeted/chocolate_dance2_subject1_50hz_20261001_manual_offsets/npz50/dance2_subject1.rllchoc
+```
+
+The converter checks the source FPS, joint manifest, torso anchor and array shapes, and reorders the source Isaac quaternion from WXYZ to the plugin's XYZW representation. The plugin config points to this generated file. The sample `cpp/config/chocolate_policy.yaml` references the two existing checkpoints under `~/chocolate_training`; inspect and adjust `plugin.path` if running from an installed prefix.
+
+The external Chocolate MJCF can be used directly with the generic sim hardware node; it exposes 23 named motor joints and the `torso_link` free base. Run both processes in the same DDS domain and select modes `1`/`2` from Viser:
+
+```bash
+rll-sim-hardware \
+  xml=~/chocolate_training/source/chocolate_asset/description/mjcf/Chocolate.xml \
+  runtime.dds.domain_id=23
+build-cpp/rll-policy --config cpp/config/chocolate_policy.yaml
+```
+
+The sim node publishes `robot/state` and `robot/rc_command`; the native policy node publishes `robot/motor_command`. The Chocolate MJCF, checkpoints, and converted motion file are external inputs.
+
+An offline DDS integration smoke (CPU inference, both real checkpoints, and a converted motion file) is available for development:
+
+```bash
+source ~/env_isaaclab_ea/bin/activate
+python cpp/tests/chocolate_dds_smoke.py \
+  --domain-id 92 \
+  --xml ~/chocolate_training/source/chocolate_asset/description/mjcf/Chocolate.xml \
+  --motion /path/to/dance2_subject1.rllchoc \
+  --velocity-checkpoint ~/chocolate_training/.pretrained_checkpoints/sim2sim/velocity_policy_model_18600.pt\
+  --tracking-checkpoint ~/chocolate_training/logs/rsl_rl/chocolate_tracking/2026-10-01_15-59-07_dance2_subject1_manual_offsets_20261001/exported/policy.pt
+```

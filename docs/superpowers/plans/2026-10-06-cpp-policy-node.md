@@ -174,8 +174,8 @@
 
 **Source of truth:** `/home/jvwei/chocolate_training/sim2sim_profile.py`, Chocolate joint manifest/control profile, existing simulator DDS state contract, and the Chocolate velocity/tracking TorchScript checkpoints. The sample selects velocity on mode 1 and tracking on mode 2; runtime output blending remains owned by the generic C++ coordinator.
 
-- [ ] **Step 1: Capture Chocolate joint orders, scales, gains, default pose, observation terms, and checkpoint contracts in a failing plugin contract test.**
-- [ ] **Step 2: Implement the Chocolate plugin and offline motion converter; verify both models against the C++ inference API.**
-- [ ] **Step 3: Add the Chocolate YAML example and user-facing invocation; keep model and motion files external.**
-- [ ] **Step 4: Run Chocolate plugin contracts and a headless DDS integration smoke test.**
-- [ ] **Step 5: Commit** as `feat: add Chocolate tracking policy example`.
+- [x] **Step 1: Capture Chocolate joint orders, scales, gains, default pose, observation terms, and checkpoint contracts in a failing plugin contract test.**
+- [x] **Step 2: Implement the Chocolate plugin and offline motion converter; verify both models against the C++ inference API.**
+- [x] **Step 3: Add the Chocolate YAML example and user-facing invocation; keep model and motion files external.**
+- [x] **Step 4: Run Chocolate plugin contracts and a headless DDS integration smoke test.**
+- [x] **Step 5: Commit** as `feat: add Chocolate tracking policy example`.

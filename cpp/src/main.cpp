@@ -124,6 +124,8 @@ int main(int argc,char** argv) {
       } else {
         const auto desired_state=state_machine.state();
         if (desired_state!=(transition_active?transition_target:stable_state)) {
+          std::cout << "[state] " << (transition_active?transition_target:stable_state)
+                    << " -> " << desired_state << std::endl;
           const bool interrupted=transition_active;
           transition_target=desired_state; transition_start=loop_start;
           transition_active=config.transition_duration_s>0.0;

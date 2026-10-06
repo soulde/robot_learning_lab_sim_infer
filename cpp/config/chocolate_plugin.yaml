@@ -1,0 +1,4 @@
+# Generated motion binary produced by tools/convert_chocolate_motion.py.
+# Path is resolved relative to this config; keep the motion dataset external.
+motion_file: ~/datasets/lafan1_retargeted/chocolate_dance2_subject1_50hz_20261001_manual_offsets/npz50/dance2_subject1.rllchoc
+expected_fps: 50.0

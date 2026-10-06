@@ -42,10 +42,16 @@ target_link_libraries(rll_policy_runtime PUBLIC rll_policy_inference rll_policy_
 add_executable(rll-policy src/main.cpp)
 target_link_libraries(rll-policy PRIVATE rll_policy_plugin_loader rll_policy_runtime)
 
+add_library(chocolate_robot_plugin SHARED plugins/chocolate/chocolate_plugin.cpp)
+target_include_directories(chocolate_robot_plugin PRIVATE include ${TORCH_INCLUDE_DIRS})
+target_link_libraries(chocolate_robot_plugin PRIVATE rll_policy_messages yaml-cpp ${TORCH_LIBRARIES})
+install(TARGETS chocolate_robot_plugin LIBRARY DESTINATION lib/rll-policy/plugins)
+
 # Torch is commonly provided by the active Isaac Lab environment rather than
 # the system loader path. Preserve that library location for installed users.
 get_filename_component(TORCH_PACKAGE_ROOT "${Torch_DIR}/../../.." ABSOLUTE)
 set_property(TARGET rll-policy APPEND PROPERTY INSTALL_RPATH "${TORCH_PACKAGE_ROOT}/lib")
+set_property(TARGET chocolate_robot_plugin APPEND PROPERTY INSTALL_RPATH "${TORCH_PACKAGE_ROOT}/lib")
 install(TARGETS rll-policy RUNTIME DESTINATION bin)
 install(FILES config/policy_node.yaml DESTINATION share/rll-policy/config)
 install(FILES include/rll_policy/messages.hpp include/rll_policy/processors.hpp
@@ -99,4 +105,10 @@ if(BUILD_TESTING)
     -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
     -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/install_contract_test.cmake")
+
+  add_executable(chocolate_plugin_test tests/chocolate_plugin_test.cpp)
+  target_include_directories(chocolate_plugin_test PRIVATE ${TORCH_INCLUDE_DIRS})
+  target_link_libraries(chocolate_plugin_test PRIVATE rll_policy_plugin_loader ${TORCH_LIBRARIES})
+  add_dependencies(chocolate_plugin_test chocolate_robot_plugin)
+  add_test(NAME chocolate_plugin_test COMMAND chocolate_plugin_test "$<TARGET_FILE:chocolate_robot_plugin>")
 endif()
