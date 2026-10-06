@@ -64,7 +64,9 @@ PolicyRuntimeConfig PolicyRuntimeConfig::load(const std::filesystem::path& confi
   for (const auto& item: policies) {
     PolicySlot slot; int index=required<int>(item,"index");
     if (index<1 || index>9 || !indices.insert(index).second) throw std::invalid_argument("policy indices must be unique values from 1 to 9");
-    slot.index=static_cast<std::uint16_t>(index); slot.model.name=required<std::string>(item,"name");
+    slot.index=static_cast<std::uint16_t>(index); slot.type=required<std::string>(item,"type");
+    if (slot.type.empty()) throw std::invalid_argument("policy type cannot be empty");
+    slot.model.name=required<std::string>(item,"name");
     if (slot.model.name.empty() || !names.insert(slot.model.name).second) throw std::invalid_argument("policy names must be non-empty and unique");
     slot.model.checkpoint=resolve_path(base,required<std::string>(item,"checkpoint"));
     slot.model.observation_dim=required<std::int64_t>(item,"observation_dim"); slot.model.action_dim=required<std::int64_t>(item,"action_dim");
@@ -79,7 +81,15 @@ PolicyRuntimeConfig PolicyRuntimeConfig::load(const std::filesystem::path& confi
     std::optional<std::string> policy;
     if (node["policy"] && !node["policy"].IsNull()) policy=node["policy"].as<std::string>();
     if (policy && !names.count(*policy)) throw std::invalid_argument("state '"+state+"' maps to an unknown policy '"+*policy+"'");
+    StateCommand command=policy ? StateCommand::policy : StateCommand::damping;
+    if (node["command"]) {
+      const auto value=node["command"].as<std::string>();
+      if (value=="fixed_pose" && !policy) command=StateCommand::fixed_pose;
+      else if (value=="damping" && !policy) command=StateCommand::damping;
+      else throw std::invalid_argument("state '"+state+"' command must be damping or fixed_pose and cannot have a policy");
+    }
     out.state_machine.state_policies.emplace(state,policy);
+    out.state_machine.state_commands.emplace(state,command);
     auto transitions=node["transitions"]; if (transitions && transitions.IsMap()) {
       auto& dest=out.state_machine.transitions[state];
       for (const auto& edge: transitions) {
@@ -111,15 +121,25 @@ PolicyRuntimeConfig PolicyRuntimeConfig::load(const std::filesystem::path& confi
   if (!out.state_machine.mode_events.count(0)) throw std::invalid_argument("mode 0 must be configured for damping");
   for (const auto& [mode,event]:out.state_machine.mode_events) {
     (void)event;
-    if (mode!=0 && !indices.count(mode)) throw std::invalid_argument("mode events may only select configured policy indices");
+    if (mode!=0 && !indices.count(mode) && mode!=3) throw std::invalid_argument("mode events may only select configured policy indices or fixed-pose mode 3");
   }
   const auto damping_event=out.state_machine.mode_events.at(0);
   for (const auto& [state,policy]:out.state_machine.state_policies) {
     auto edges=out.state_machine.transitions.find(state);
     if (edges==out.state_machine.transitions.end() || !edges->second.count(damping_event) ||
-        out.state_machine.state_policies.at(edges->second.at(damping_event)).has_value())
+        out.state_machine.state_commands.at(edges->second.at(damping_event))!=StateCommand::damping)
       throw std::invalid_argument("mode 0 must transition every state to a damping state");
     (void)policy;
+  }
+  if (out.state_machine.mode_events.count(3)) {
+    const auto event=out.state_machine.mode_events.at(3);
+    for (const auto& [state,command]:out.state_machine.state_commands) {
+      auto edges=out.state_machine.transitions.find(state);
+      if (edges==out.state_machine.transitions.end() || !edges->second.count(event) ||
+          out.state_machine.state_commands.at(edges->second.at(event))!=StateCommand::fixed_pose)
+        throw std::invalid_argument("mode 3 must transition every state to a fixed_pose state");
+      (void)command;
+    }
   }
   for (const auto& slot: out.policies) {
     bool mapped=false;

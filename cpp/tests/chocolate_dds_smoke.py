@@ -59,11 +59,13 @@ damping:
   kd: 0.5
 policies:
   - index: 1
+    type: velocity
     name: velocity
     checkpoint: {args.velocity_checkpoint.resolve()}
     observation_dim: 78
     action_dim: 23
   - index: 2
+    type: tracking
     name: tracking
     checkpoint: {args.tracking_checkpoint.resolve()}
     observation_dim: 124

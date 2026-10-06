@@ -50,7 +50,7 @@ def make_state():
 def make_rc(mode):
     return SimpleNamespace(
         timestamp_ns=1100, enabled=True, mode=mode, vx=0.2, vy=-0.1,
-        yaw_rate=0.3, body_height=0.35,
+        yaw_rate=0.3,
     )
 
 

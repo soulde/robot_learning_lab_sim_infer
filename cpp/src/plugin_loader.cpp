@@ -32,11 +32,11 @@ RobotPluginHandle RobotPluginHandle::load(const std::filesystem::path& plugin_pa
     if (actual != kRobotPluginAbiVersion)
       throw std::runtime_error("robot plugin '" + plugin_path.string() + "' ABI mismatch: expected " +
                                std::to_string(kRobotPluginAbiVersion) + ", got " + std::to_string(actual));
-    const auto create_input = symbol<InputProcessor* (*)(const char*)>(result.library_, "rll_create_input_processor_v1", plugin_path);
-    result.destroy_input_ = symbol<void (*)(InputProcessor*)>(result.library_, "rll_destroy_input_processor_v1", plugin_path);
+    const auto create_input = symbol<InputProcessor* (*)(const char*)>(result.library_, "rll_create_input_processor_v2", plugin_path);
+    result.destroy_input_ = symbol<void (*)(InputProcessor*)>(result.library_, "rll_destroy_input_processor_v2", plugin_path);
     const auto create_output = symbol<OutputProcessor* (*)(const char*, MotorCommandWriteFn, void*)>(
-        result.library_, "rll_create_output_processor_v1", plugin_path);
-    result.destroy_output_ = symbol<void (*)(OutputProcessor*)>(result.library_, "rll_destroy_output_processor_v1", plugin_path);
+        result.library_, "rll_create_output_processor_v2", plugin_path);
+    result.destroy_output_ = symbol<void (*)(OutputProcessor*)>(result.library_, "rll_destroy_output_processor_v2", plugin_path);
     result.input_ = create_input(config_path.c_str());
     if (!result.input_) throw std::runtime_error("robot plugin '" + plugin_path.string() + "' returned a null input processor");
     result.output_ = create_output(config_path.c_str(), writer, writer_context);

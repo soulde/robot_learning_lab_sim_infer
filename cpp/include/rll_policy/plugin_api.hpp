@@ -5,7 +5,7 @@
 #include <cstdint>
 
 namespace rll_policy {
-inline constexpr std::uint32_t kRobotPluginAbiVersion = 1;
+inline constexpr std::uint32_t kRobotPluginAbiVersion = 2;
 }
 
 #if defined(__GNUC__)
@@ -16,9 +16,9 @@ inline constexpr std::uint32_t kRobotPluginAbiVersion = 1;
 
 extern "C" {
 RLL_PLUGIN_EXPORT std::uint32_t rll_robot_plugin_abi_version();
-RLL_PLUGIN_EXPORT rll_policy::InputProcessor* rll_create_input_processor_v1(const char* config_path);
-RLL_PLUGIN_EXPORT void rll_destroy_input_processor_v1(rll_policy::InputProcessor* processor);
-RLL_PLUGIN_EXPORT rll_policy::OutputProcessor* rll_create_output_processor_v1(
+RLL_PLUGIN_EXPORT rll_policy::InputProcessor* rll_create_input_processor_v2(const char* config_path);
+RLL_PLUGIN_EXPORT void rll_destroy_input_processor_v2(rll_policy::InputProcessor* processor);
+RLL_PLUGIN_EXPORT rll_policy::OutputProcessor* rll_create_output_processor_v2(
     const char* config_path, rll_policy::MotorCommandWriteFn writer, void* context);
-RLL_PLUGIN_EXPORT void rll_destroy_output_processor_v1(rll_policy::OutputProcessor* processor);
+RLL_PLUGIN_EXPORT void rll_destroy_output_processor_v2(rll_policy::OutputProcessor* processor);
 }

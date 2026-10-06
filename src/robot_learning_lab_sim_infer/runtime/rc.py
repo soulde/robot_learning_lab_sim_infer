@@ -15,7 +15,7 @@ class RCValues:
     vx: float = 0.0
     vy: float = 0.0
     yaw_rate: float = 0.0
-    body_height: float = 0.0
+    button_mask: int = 0
 
 
 class RCMapper:
@@ -31,6 +31,7 @@ class RCMapper:
         self._axes = {axis: 0.0 for axis in self._AXES}
         self._enabled = True
         self._mode = 0
+        self._button_mask = 0
 
     def _range(self, axis: str) -> tuple[float, float]:
         bounds = self._config.axis_ranges.get(
@@ -47,6 +48,7 @@ class RCMapper:
             vx=self._axes["vx"],
             vy=self._axes["vy"],
             yaw_rate=self._axes["yaw_rate"],
+            button_mask=self._button_mask,
         )
 
     def set_values(self, values: RCValues) -> RCValues:
@@ -58,10 +60,10 @@ class RCMapper:
         return self._values()
 
     def reset(self) -> RCValues:
-        """Clear motion and select the always-enabled damping mode (mode zero)."""
+        """Clear velocity commands while keeping the currently selected mode."""
         self._axes = {axis: 0.0 for axis in self._AXES}
         self._enabled = True
-        self._mode = 0
+        self._button_mask = 0
         return self._values()
 
     def key_event(self, key: str, pressed: bool = True) -> RCValues:
@@ -69,10 +71,16 @@ class RCMapper:
             return self._values()
         normalized = key.upper()
         self._enabled = True
+        self._button_mask = 0
         if normalized == self._config.clear_key.upper():
             self._axes = {axis: 0.0 for axis in self._AXES}
         elif normalized in self._config.mode_keys:
             self._mode = int(self._config.mode_keys[normalized])
+        elif normalized in self._config.button_keys:
+            bit = int(self._config.button_keys[normalized])
+            if bit <= 0 or bit & (bit - 1):
+                raise ValueError(f"RC button mapping for {normalized!r} must be a single-bit mask")
+            self._button_mask = bit
         else:
             for bound_key, binding in self._config.key_axes.items():
                 if bound_key.upper() != normalized:

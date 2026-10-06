@@ -25,7 +25,7 @@ struct RCCommand {
   std::uint64_t timestamp_ns{};
   bool enabled{};
   std::uint16_t mode{};
-  float vx{}, vy{}, yaw_rate{}, body_height{};
+  float vx{}, vy{}, yaw_rate{};
   std::uint32_t button_mask{};
 };
 

@@ -46,16 +46,16 @@ class RCConfig:
     )
     axis_ranges: dict[str, list[float]] = field(
         default_factory=lambda: {
-            "vx": [-1.0, 1.0],
-            "vy": [-0.6, 0.6],
+            "vx": [-4.0, 4.0],
+            "vy": [-4.0, 4.0],
             "yaw_rate": [-1.5, 1.5],
         }
     )
-    body_height_range: list[float] = field(default_factory=lambda: [0.2, 0.5])
     clear_key: str = "Z"
     mode_keys: dict[str, int] = field(
         default_factory=lambda: {str(mode): mode for mode in range(10)}
     )
+    button_keys: dict[str, int] = field(default_factory=lambda: {"T": 1})
 
 
 @dataclass
@@ -77,11 +77,13 @@ class ViserConfig:
     port: int = 8080
     enabled: bool = True
     render_hz: float = 30.0
+    camera_distance: float = 2.5
 
 
 @dataclass
 class RuntimeConfig:
-    simulation_dt: float = 0.002
+    # None follows the timestep declared by the loaded simulator model.
+    simulation_dt: float | None = None
     dds: DDSConfig = field(default_factory=DDSConfig)
     rc: RCConfig = field(default_factory=RCConfig)
     state_machine: StateMachineConfig = field(default_factory=StateMachineConfig)

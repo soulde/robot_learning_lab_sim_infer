@@ -74,7 +74,7 @@ def test_rc_mapper_uses_configured_physical_ranges():
 def test_rc_mapper_keyboard_clear_preserves_enable_and_gui_values():
     mapper = RCMapper(RCConfig())
     mapper.set_values(SimpleNamespace(enabled=True, mode=2, vx=0.4, vy=-0.2,
-                                      yaw_rate=0.1, body_height=0.33))
+                                      yaw_rate=0.1))
     cleared = mapper.key_event("Z")
     assert (cleared.vx, cleared.vy, cleared.yaw_rate) == (0.0, 0.0, 0.0)
     assert cleared.enabled and cleared.mode == 2
@@ -87,7 +87,7 @@ def test_rc_mapper_numeric_hotkeys_publish_policy_selection_and_damping_modes():
     assert mapper.key_event("0").mode == 0
 
 
-def test_rc_mapper_reset_clears_motion_and_selects_damping_mode():
+def test_rc_mapper_reset_clears_motion_and_preserves_selected_mode():
     mapper = RCMapper(RCConfig())
     mapper.key_event("I")
     mapper.key_event("1")
@@ -95,7 +95,7 @@ def test_rc_mapper_reset_clears_motion_and_selects_damping_mode():
     values = mapper.reset()
 
     assert values.enabled
-    assert values.mode == 0
+    assert values.mode == 1
     assert (values.vx, values.vy, values.yaw_rate) == (0.0, 0.0, 0.0)
 
 

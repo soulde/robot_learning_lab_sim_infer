@@ -27,6 +27,8 @@ class XmlHardwareProfile:
         self._joint_ids: dict[str, int] = {}
         self._joint_actuators: dict[str, int] = {}
         self._base_body_id = 1
+        self._base_free_dofadr: int | None = None
+        self._effort_limits_by_mode: dict[int, dict[str, float]] = {}
 
     def build_model(self):
         if self._model is None:
@@ -66,6 +68,22 @@ class XmlHardwareProfile:
             )
         if len(self._joint_ids) > 64:
             raise ValueError("This DDS schema supports at most 64 actuated joints")
+        for mode in (1, 2):
+            name = f"rll_effort_limit_mode_{mode}"
+            numeric_id = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_NUMERIC, name))
+            if numeric_id < 0:
+                continue
+            start = int(model.numeric_adr[numeric_id])
+            size = int(model.numeric_size[numeric_id])
+            if size != len(self._joint_actuators):
+                raise ValueError(
+                    f"MJCF numeric {name!r} must define one effort limit per actuated joint "
+                    f"in actuator order ({len(self._joint_actuators)} values)"
+                )
+            values = np.asarray(model.numeric_data[start : start + size], dtype=np.float64)
+            if not np.isfinite(values).all() or np.any(values <= 0.0):
+                raise ValueError(f"MJCF numeric {name!r} must contain finite positive effort limits")
+            self._effort_limits_by_mode[mode] = dict(zip(self._joint_actuators, values.tolist()))
         free_joint = next(
             (jid for jid in range(model.njnt)
              if model.jnt_type[jid] == mujoco.mjtJoint.mjJNT_FREE),
@@ -73,11 +91,15 @@ class XmlHardwareProfile:
         )
         if free_joint is not None:
             self._base_body_id = int(model.jnt_bodyid[free_joint])
+            self._base_free_dofadr = int(model.jnt_dofadr[free_joint])
 
     def reset(self, model: Any, data: Any) -> None:
         import mujoco
 
-        mujoco.mj_resetData(model, data)
+        if model.nkey:
+            mujoco.mj_resetDataKeyframe(model, data, 0)
+        else:
+            mujoco.mj_resetData(model, data)
         mujoco.mj_forward(model, data)
 
     def extract_robot_state(self, model: Any, data: Any, timestamp_ns: int) -> RobotState:
@@ -101,8 +123,18 @@ class XmlHardwareProfile:
         imu_quat = self._sensor(model, data, mujoco.mjtSensor.mjSENS_FRAMEQUAT)
         imu_gyro = self._sensor(model, data, mujoco.mjtSensor.mjSENS_GYRO)
         imu_accel = self._sensor(model, data, mujoco.mjtSensor.mjSENS_ACCELEROMETER)
-        quat_wxyz = base_quat_wxyz if imu_quat is None else imu_quat
+        # Policy base orientation must match the free-joint/body frame used by
+        # training. MuJoCo's framequat sensor for a body reports its inertial
+        # frame orientation, which can include the body's principal-inertia
+        # rotation even when the body itself is upright. Keep that sensor value
+        # in imu_orientation, but do not substitute it for the base pose.
+        quat_wxyz = base_quat_wxyz
         angular_velocity = spatial_velocity[:3] if imu_gyro is None else imu_gyro
+        if imu_gyro is None and self._base_free_dofadr is not None:
+            # Free-joint angular qvel is expressed in the body frame, as used
+            # by the Chocolate velocity policy during training/sim2sim.
+            start = self._base_free_dofadr + 3
+            angular_velocity = np.asarray(data.qvel[start : start + 3], dtype=np.float64).copy()
         linear_acceleration = np.zeros(3) if imu_accel is None else imu_accel
         contacts = np.asarray(data.cfrc_ext[1:, 3:6], dtype=np.float64).reshape(-1)
 
@@ -115,8 +147,10 @@ class XmlHardwareProfile:
             base_position=base_position.tolist(),
             base_orientation_xyzw=quat_wxyz[[1, 2, 3, 0]].tolist(),
             base_linear_velocity=spatial_velocity[3:].tolist(),
-            base_angular_velocity=spatial_velocity[:3].tolist(),
-            imu_orientation_xyzw=quat_wxyz[[1, 2, 3, 0]].tolist(),
+            base_angular_velocity=angular_velocity.tolist(),
+            imu_orientation_xyzw=(
+                base_quat_wxyz if imu_quat is None else imu_quat
+            )[[1, 2, 3, 0]].tolist(),
             imu_angular_velocity=angular_velocity.tolist(),
             imu_linear_acceleration=linear_acceleration.tolist(),
             contact_force_xyz=contacts[:256].tolist(),
@@ -141,11 +175,23 @@ class XmlHardwareProfile:
             vx=float(rc_values.vx),
             vy=float(rc_values.vy),
             yaw_rate=float(rc_values.yaw_rate),
-            body_height=float(rc_values.body_height),
-            button_mask=0,
+            button_mask=int(rc_values.button_mask),
         )
 
     def apply_motor_command(self, model: Any, data: Any, command: Any) -> None:
+        self._apply_motor_command(model, data, command, None)
+
+    def apply_motor_command_for_mode(
+        self, model: Any, data: Any, command: Any, mode: int
+    ) -> None:
+        """Apply a command with the robot's optional RC-mode actuator envelope."""
+        self._apply_motor_command(
+            model, data, command, self._effort_limits_by_mode.get(int(mode))
+        )
+
+    def _apply_motor_command(
+        self, model: Any, data: Any, command: Any, effort_limits: dict[str, float] | None
+    ) -> None:
         names = tuple(command.joint_names)
         if len(names) != len(set(names)):
             raise ValueError("MotorCommand joint_names contains duplicates")
@@ -173,6 +219,9 @@ class XmlHardwareProfile:
             else:
                 raise ValueError(f"Unsupported motor control mode: {mode!r}")
 
+            if effort_limits is not None and name in effort_limits:
+                limit = effort_limits[name]
+                effort = float(np.clip(effort, -limit, limit))
             gear = float(model.actuator_gear[actuator_id, 0])
             if gear == 0.0:
                 raise ValueError(f"XML motor for joint {name!r} has zero gear")

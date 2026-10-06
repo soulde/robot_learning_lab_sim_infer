@@ -66,7 +66,7 @@ if(BUILD_TESTING)
 
   add_library(test_robot_plugin SHARED tests/test_robot_plugin.cpp)
   target_include_directories(test_robot_plugin PRIVATE include ${TORCH_INCLUDE_DIRS})
-  target_compile_definitions(test_robot_plugin PRIVATE RLL_PLUGIN_ABI=1)
+  target_compile_definitions(test_robot_plugin PRIVATE RLL_PLUGIN_ABI=2)
   target_link_libraries(test_robot_plugin PRIVATE rll_policy_messages ${TORCH_LIBRARIES})
   add_library(wrong_abi_plugin SHARED tests/test_robot_plugin.cpp)
   target_include_directories(wrong_abi_plugin PRIVATE include ${TORCH_INCLUDE_DIRS})

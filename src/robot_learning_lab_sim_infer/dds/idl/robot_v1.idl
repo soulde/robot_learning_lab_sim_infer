@@ -26,7 +26,6 @@ module robot_learning_lab_sim_infer {
         float vx;
         float vy;
         float yaw_rate;
-        float body_height;
         unsigned long button_mask;
       };
 

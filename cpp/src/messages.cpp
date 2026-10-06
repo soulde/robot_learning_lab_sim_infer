@@ -83,10 +83,10 @@ RobotState from_idl(const robot_learning_lab_sim_infer_msg_v1_RobotState& v) {
 }
 robot_learning_lab_sim_infer_msg_v1_RCCommand to_idl(const RCCommand& v) {
   robot_learning_lab_sim_infer_msg_v1_RCCommand out{}; out.timestamp_ns=v.timestamp_ns; out.enabled=v.enabled; out.mode=v.mode;
-  out.vx=v.vx; out.vy=v.vy; out.yaw_rate=v.yaw_rate; out.body_height=v.body_height; out.button_mask=v.button_mask; return out;
+  out.vx=v.vx; out.vy=v.vy; out.yaw_rate=v.yaw_rate; out.button_mask=v.button_mask; return out;
 }
 RCCommand from_idl(const robot_learning_lab_sim_infer_msg_v1_RCCommand& v) {
-  return {v.timestamp_ns,v.enabled,v.mode,v.vx,v.vy,v.yaw_rate,v.body_height,v.button_mask};
+  return {v.timestamp_ns,v.enabled,v.mode,v.vx,v.vy,v.yaw_rate,v.button_mask};
 }
 robot_learning_lab_sim_infer_msg_v1_MotorCommand to_idl(const MotorCommand& v) {
   check_names<64>(v.joint_names); check_size<64>(v.position,"position"); check_size<64>(v.velocity,"velocity");

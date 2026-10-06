@@ -68,7 +68,7 @@ python -m robot_learning_lab_sim_infer.main \
 
 节点化运行时以 `sim_hardware_node.py` 为仿真硬件入口。单个进程内有三个应用工作线程：
 
-1. 仿真线程独占 MuJoCo 写操作并按 Hydra 配置中的 `runtime.simulation_dt` 推进物理；
+1. 仿真线程独占 MuJoCo 写操作；`runtime.simulation_dt` 未设置时跟随 MJCF 的 `option.timestep`，显式覆盖时同时更新 MuJoCo 物理步长和墙钟调度周期；
 2. 渲染线程通过 `mjviser` 将同一个 `MjModel` / `MjData` 更新到 Viser；
 3. DDS 线程发布机器人观测和 mock RC，并接收最新电机命令。
 
@@ -86,7 +86,7 @@ python -m robot_learning_lab_sim_infer.dds.generate
 仿真硬件节点使用包内 Hydra structured config 和 MJCF XML，不需要机器人 Python cfg。Hydra 配置保存运行参数与 MJCF 路径；MJCF 描述几何、关节、电机和传感器。默认加载打包的 DR02 torque motor 模型。通用 XML profile 当前要求每个受控关节使用一个命名的 hinge/slide direct motor actuator；position/velocity/MIT command 由消息里的 kp/kd 转成电机力矩，torque command 直接映射到 actuator control。
 
 ```bash
-# 默认 DR02；传感器 100 Hz、MuJoCo step 0.002 s、Viser 30 Hz
+# 默认 DR02；仿真自动使用 XML timestep，传感器 100 Hz、Viser 30 Hz
 rll-sim-hardware
 
 # 替换模型或覆盖 Hydra 参数
@@ -96,7 +96,7 @@ rll-sim-hardware xml=/path/to/robot.xml runtime.simulation_dt=0.001 runtime.dds.
 rll-sim-hardware runtime.viser.enabled=false
 ```
 
-默认遥控范围为 `vx=[-1,1] m/s`、`vy=[-0.6,0.6] m/s`、`yaw_rate=[-1.5,1.5] rad/s` 和 `body_height=[0.2,0.5] m`。I/K、J/L、U/O 每按一次分别按配置步长增减对应指令，键盘遥控始终使能；Z 将三个速度指令清零。滑块可直接输入命令。可用 `runtime.rc.key_steps.vx=0.2` 设置按键步长，并用 `runtime.rc.axis_ranges.vx=[-0.8,1.2]` 调整限幅。
+默认遥控范围为 `vx=[-4,4] m/s`、`vy=[-4,4] m/s` 和 `yaw_rate=[-1.5,1.5] rad/s`。I/K、J/L、U/O 每按一次分别按配置步长增减对应指令，键盘遥控始终使能；Z 将三个速度指令清零。滑块可直接输入命令。可用 `runtime.rc.key_steps.vx=0.2` 设置按键步长，并用 `runtime.rc.axis_ranges.vx=[-0.8,1.2]` 调整限幅。Viser 默认相机距离为 2.5 米，可通过 `runtime.viser.camera_distance` 调整。
 
 策略推理与状态机由独立的 native C++ policy 进程负责。它使用 Cyclone DDS C API 与 LibTorch TorchScript，不依赖 ROS 或 Boost。Python `rll-dummy-control` 仍用于检查 DDS 闭环，但不是正式推理节点。
 
@@ -120,7 +120,7 @@ build-cpp/install/bin/rll-policy --help
 build-cpp/install/bin/rll-policy --config /path/to/policy.yaml
 ```
 
-插件是一个由 `dlopen` 加载的 C++ shared library，实现 `cpp/include/rll_policy/processors.hpp` 的 `InputProcessor` 和 `OutputProcessor`，并导出 `cpp/include/rll_policy/plugin_api.hpp` 中的 ABI v1 工厂/销毁函数。输出处理器通过宿主注入的 writer 发布 `MotorCommand`，不需要访问 DDS 实现。插件和节点必须使用兼容的编译器、LibTorch ABI 与 SDK 版本。仓库默认配置 `cpp/config/policy_node.yaml` 只展示通用字段；机器人必须提供自己的插件和策略配置。
+插件是一个由 `dlopen` 加载的 C++ shared library，实现 `cpp/include/rll_policy/processors.hpp` 的 `InputProcessor` 和 `OutputProcessor`，并导出 `cpp/include/rll_policy/plugin_api.hpp` 中 ABI v2 的工厂/销毁函数。输出处理器通过宿主注入的 writer 发布 `MotorCommand`，不需要访问 DDS 实现。插件和节点必须使用兼容的编译器、LibTorch ABI 与 SDK 版本。仓库默认配置 `cpp/config/policy_node.yaml` 只展示通用字段；机器人必须提供自己的插件和策略配置。
 
 ### Dummy DDS control node
 
@@ -132,7 +132,7 @@ rll-dummy-control dds.domain_id=23 control.rate_hz=50 control.damping_kd=0.5
 
 ### Chocolate velocity and whole-body tracking
 
-The Chocolate example uses the native C++ plugin for both exported TorchScript actors. Mode `1` selects the 78-value velocity policy; mode `2` selects the 124-value whole-body tracking policy. The plugin uses the Chocolate canonical/tracking joint orders, default pose, gain profile, `0.5` action scale, previous-action histories, and torso-relative reference features. Generic runtime transition blending controls the command handoff. Reference playback starts when mode 2 is selected and advances at the motion file's 50 Hz rate.
+The Chocolate example uses the native C++ plugin for both exported TorchScript actors. Each policy declares a `type`; mode `1` selects the 78-value velocity policy, and mode `2` selects the 124-value whole-body tracking policy. Selecting tracking aligns and holds motion frame zero; press `T` to start playback at the motion file's 50 Hz rate. Mode `3` selects the `fix` state, which holds the configured `default_joint` pose with the robot plugin's fixed Kp/Kd gains. The plugin uses the Chocolate canonical/tracking joint orders, `0.5` action scale, previous-action histories, and torso-relative reference features. Generic runtime transition blending controls the command handoff.
 
 The two exported weights and the LAFAN reference remain external. Convert the reference archive into the small versioned runtime format (header plus per-frame tracking-order joint position/velocity and torso pose):
 

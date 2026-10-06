@@ -18,11 +18,13 @@ damping:
   kd: 0.7
 policies:
   - index: 1
+    type: velocity
     name: velocity
     checkpoint: ./velocity.pt
     observation_dim: 3
     action_dim: 2
   - index: 2
+    type: tracking
     name: tracking
     checkpoint: ./tracking.pt
     observation_dim: 5

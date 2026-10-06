@@ -34,26 +34,38 @@ struct Vec3 { double x{},y{},z{}; };
 struct Quat { double x{},y{},z{},w{1.0}; };
 struct MotionFrame { std::array<float,kJoints> position{},velocity{}; Vec3 torso_position; Quat torso_orientation; };
 struct Motion { double fps{}; std::vector<MotionFrame> frames; };
+std::size_t name_index(const Names& names,const std::string& name);
 struct Context {
   std::array<double,kJoints> velocity_history{},tracking_history{};
+  std::array<double,kJoints> default_position{};
   Motion motion;
   std::uint64_t tracking_start_ns{};
   bool tracking_started{};
   bool tracking_restart_pending{true};
+  bool tracking_playing{};
+  std::uint32_t previous_button_mask{};
+  std::uint32_t motion_start_button_mask{1};
   Quat alignment_rotation{};
   Vec3 alignment_translation{};
 };
 
-std::array<double,kJoints> defaults() {
+std::array<double,kJoints> read_default_joint(const YAML::Node& config) {
+  const auto node=config["default_joint"];
+  if (!node || !node.IsMap()) throw std::invalid_argument("Chocolate plugin config requires default_joint mapping");
+  if (node.size()!=kJoints) throw std::invalid_argument("default_joint must define exactly all 23 Chocolate joints");
   std::array<double,kJoints> values{};
-  for (std::size_t i=0;i<kJoints;++i) {
-    const std::string name=kJointNames[i];
-    if (name=="left_shoulder_roll_joint") values[i]=0.5236;
-    else if (name=="right_shoulder_roll_joint") values[i]=-0.5236;
-    else if (name.find("hip_pitch")!=std::string::npos) values[i]=-0.312414;
-    else if (name.find("knee")!=std::string::npos) values[i]=0.72955;
-    else if (name.find("ankle_pitch")!=std::string::npos) values[i]=-0.40457;
+  std::array<bool,kJoints> found{};
+  for (const auto& entry:node) {
+    if (!entry.first.IsScalar()) throw std::invalid_argument("default_joint keys must be joint names");
+    const auto name=entry.first.as<std::string>();
+    const auto index=name_index(kJointNames,name);
+    const double value=entry.second.as<double>();
+    if (!std::isfinite(value)) throw std::invalid_argument("default_joint values must be finite: "+name);
+    if (found[index]) throw std::invalid_argument("duplicate default_joint entry: "+name);
+    found[index]=true; values[index]=value;
   }
+  for (std::size_t i=0;i<kJoints;++i)
+    if (!found[i]) throw std::invalid_argument("default_joint is missing Chocolate joint: "+std::string(kJointNames[i]));
   return values;
 }
 std::array<double,kJoints> gains_kp() {
@@ -99,8 +111,7 @@ std::array<double,6> first_two_columns(Quat q) {
   const double xx=q.x*q.x, yy=q.y*q.y, zz=q.z*q.z, xy=q.x*q.y, xz=q.x*q.z, yz=q.y*q.z, wx=q.w*q.x, wy=q.w*q.y, wz=q.w*q.z;
   return {1-2*(yy+zz),2*(xy-wz),2*(xy+wz),1-2*(xx+zz),2*(xz-wy),2*(yz+wx)};
 }
-std::filesystem::path motion_path(const char* config_path) {
-  YAML::Node config=YAML::LoadFile(config_path);
+std::filesystem::path motion_path(const YAML::Node& config, const char* config_path) {
   if (!config["motion_file"]) throw std::invalid_argument("Chocolate plugin config requires motion_file");
   std::string motion=config["motion_file"].as<std::string>();
   if (motion.rfind("~/",0)==0) {
@@ -133,16 +144,20 @@ Motion load_motion(const std::filesystem::path& path) {
   char trailing; if (in.read(&trailing,1)) throw std::runtime_error("Chocolate motion file has unexpected trailing bytes");
   return result;
 }
-double expected_fps(const char* config_path) {
-  const auto config=YAML::LoadFile(config_path);
-  return config["expected_fps"] ? config["expected_fps"].as<double>() : 50.0;
-}
 std::shared_ptr<Context> shared_context(const char* path) {
   static std::weak_ptr<Context> weak;
   auto context=weak.lock();
   if (!context) {
-    context=std::make_shared<Context>(); context->motion=load_motion(motion_path(path));
-    const double expected=expected_fps(path);
+    const auto config=YAML::LoadFile(path);
+    context=std::make_shared<Context>();
+    context->default_position=read_default_joint(config);
+    if (config["motion_start_button_mask"])
+      context->motion_start_button_mask=config["motion_start_button_mask"].as<std::uint32_t>();
+    if (!context->motion_start_button_mask ||
+        (context->motion_start_button_mask & (context->motion_start_button_mask-1)))
+      throw std::invalid_argument("motion_start_button_mask must be a single-bit mask");
+    context->motion=load_motion(motion_path(config,path));
+    const double expected=config["expected_fps"] ? config["expected_fps"].as<double>() : 50.0;
     if (!std::isfinite(expected) || std::abs(context->motion.fps-expected)>1e-6)
       throw std::runtime_error("Chocolate motion FPS does not match configured expected_fps");
     weak=context;
@@ -151,15 +166,27 @@ std::shared_ptr<Context> shared_context(const char* path) {
 }
 class ChocolateInput final : public rll_policy::InputProcessor {
  public:
-  explicit ChocolateInput(std::shared_ptr<Context> context):context_(std::move(context)),default_(defaults()) {}
-  torch::Tensor build_observation(std::string_view policy,const rll_policy::RobotState& state,const rll_policy::RCCommand& rc) override {
-    if (policy=="velocity") return velocity(state,rc);
-    if (policy=="tracking") return tracking(state,rc);
-    throw std::invalid_argument("unknown Chocolate policy: "+std::string(policy));
+  explicit ChocolateInput(std::shared_ptr<Context> context):context_(std::move(context)) {}
+  void on_policy_selected(std::string_view type) override {
+    // Each activation starts a fresh actor history. In particular, returning
+    // from the fixed-pose state must not feed actions from an earlier velocity
+    // run (or a simulator reset) into the policy's previous-action observation.
+    context_->velocity_history.fill(0.0);
+    context_->tracking_history.fill(0.0);
+    context_->tracking_started=false;
+    context_->tracking_restart_pending=true;
+    context_->tracking_playing=false;
+    context_->previous_button_mask=0;
+    if (type!="tracking") context_->tracking_start_ns=0;
+  }
+  torch::Tensor build_observation(std::string_view type,const rll_policy::RobotState& state,const rll_policy::RCCommand& rc) override {
+    if (type=="velocity") return velocity(state,rc);
+    if (type=="tracking") return tracking(state,rc);
+    throw std::invalid_argument("unknown Chocolate policy type: "+std::string(type));
   }
  private:
   torch::Tensor velocity(const rll_policy::RobotState& state,const rll_policy::RCCommand& rc) {
-    if (rc.mode!=2) context_->tracking_restart_pending=true;
+    (void)rc;
     const auto position=ordered_values(state.joint_names,state.joint_position);
     const auto velocity=ordered_values(state.joint_names,state.joint_velocity);
     Quat q{state.base_orientation_xyzw[0],state.base_orientation_xyzw[1],state.base_orientation_xyzw[2],state.base_orientation_xyzw[3]};
@@ -168,7 +195,7 @@ class ChocolateInput final : public rll_policy::InputProcessor {
     for (double x:state.base_angular_velocity) obs.push_back(static_cast<float>(x*0.25));
     obs.insert(obs.end(),{static_cast<float>(gravity.x),static_cast<float>(gravity.y),static_cast<float>(gravity.z)});
     obs.insert(obs.end(),{rc.vx*2.0f,rc.vy*2.0f,rc.yaw_rate*0.25f});
-    for (std::size_t i=0;i<kJoints;++i) obs.push_back(static_cast<float>(position[i]-default_[i]));
+    for (std::size_t i=0;i<kJoints;++i) obs.push_back(static_cast<float>(position[i]-context_->default_position[i]));
     for (double x:velocity) obs.push_back(static_cast<float>(x*0.05));
     for (double x:context_->velocity_history) obs.push_back(static_cast<float>(x));
     for (auto& x:obs) x=std::clamp(x,-100.0f,100.0f);
@@ -178,20 +205,23 @@ class ChocolateInput final : public rll_policy::InputProcessor {
     const auto position=ordered_values(state.joint_names,state.joint_position);
     const auto velocity=ordered_values(state.joint_names,state.joint_velocity);
     auto& motion=context_->motion;
-    if (rc.mode==2 && (!context_->tracking_started || context_->tracking_restart_pending)) {
+    if (!context_->tracking_started || context_->tracking_restart_pending) {
       context_->tracking_started=true; context_->tracking_start_ns=state.timestamp_ns;
+      context_->tracking_playing=false;
       const auto& first=motion.frames.front();
       Quat robot{state.base_orientation_xyzw[0],state.base_orientation_xyzw[1],state.base_orientation_xyzw[2],state.base_orientation_xyzw[3]};
       context_->alignment_rotation=multiply(robot,inverse(first.torso_orientation));
       context_->alignment_translation=sub({state.base_position[0],state.base_position[1],state.base_position[2]},rotate(context_->alignment_rotation,first.torso_position));
       context_->tracking_restart_pending=false;
     }
-    if (!context_->tracking_started) {
-      context_->tracking_started=true; context_->tracking_start_ns=state.timestamp_ns;
-      context_->alignment_rotation={0,0,0,1}; context_->alignment_translation={0,0,0};
+    const auto pressed=rc.button_mask&~context_->previous_button_mask;
+    context_->previous_button_mask=rc.button_mask;
+    if (pressed&context_->motion_start_button_mask) {
+      context_->tracking_playing=true;
+      context_->tracking_start_ns=state.timestamp_ns;
     }
-    if (rc.mode!=2) context_->tracking_restart_pending=true;
-    const double elapsed=state.timestamp_ns>=context_->tracking_start_ns ? static_cast<double>(state.timestamp_ns-context_->tracking_start_ns)*1e-9 : 0.0;
+    const double elapsed=context_->tracking_playing && state.timestamp_ns>=context_->tracking_start_ns
+        ? static_cast<double>(state.timestamp_ns-context_->tracking_start_ns)*1e-9 : 0.0;
     const auto frame_index=std::min<std::size_t>(static_cast<std::size_t>(std::llround(elapsed*motion.fps)),motion.frames.size()-1);
     const auto& reference=motion.frames[frame_index];
     Vec3 ref_position=add(rotate(context_->alignment_rotation,reference.torso_position),context_->alignment_translation);
@@ -208,19 +238,19 @@ class ChocolateInput final : public rll_policy::InputProcessor {
     for (double x:rotation) obs.push_back(static_cast<float>(x));
     for (std::size_t i=0;i<kJoints;++i) {
       const auto primary_index=name_index(kJointNames,kTrackingNames[i]);
-      obs.push_back(static_cast<float>(position[primary_index]-default_[primary_index]));
+      obs.push_back(static_cast<float>(position[primary_index]-context_->default_position[primary_index]));
     }
     for (std::size_t i=0;i<kJoints;++i) obs.push_back(static_cast<float>(velocity[name_index(kJointNames,kTrackingNames[i])]));
     for (double x:context_->tracking_history) obs.push_back(static_cast<float>(x));
     return torch::from_blob(obs.data(),{1,124},torch::TensorOptions().dtype(torch::kFloat32)).clone();
   }
-  std::shared_ptr<Context> context_; std::array<double,kJoints> default_;
+  std::shared_ptr<Context> context_;
 };
 
 class ChocolateOutput final : public rll_policy::OutputProcessor {
  public:
   ChocolateOutput(std::shared_ptr<Context> context,rll_policy::MotorCommandWriteFn writer,void* data)
-      :context_(std::move(context)),writer_(writer),writer_context_(data),default_(defaults()),kp_(gains_kp()),kd_(gains_kd()) {}
+      :context_(std::move(context)),writer_(writer),writer_context_(data),kp_(gains_kp()),kd_(gains_kd()) {}
   rll_policy::MotorCommand make_command(std::string_view policy,const torch::Tensor& action,const rll_policy::RobotState&,std::uint64_t stamp) override {
     auto values=action.to(torch::kCPU).to(torch::kFloat32).contiguous().view(-1);
     if (values.numel()!=static_cast<std::int64_t>(kJoints) || !torch::isfinite(values).all().item<bool>()) throw std::invalid_argument("Chocolate policy action must have 23 finite values");
@@ -235,7 +265,15 @@ class ChocolateOutput final : public rll_policy::OutputProcessor {
     } else throw std::invalid_argument("unknown Chocolate policy: "+std::string(policy));
     rll_policy::MotorCommand out; out.timestamp_ns=stamp; out.control_mode=rll_policy::MotorControlMode::mit;
     for (std::size_t i=0;i<kJoints;++i) {
-      out.joint_names.emplace_back(kJointNames[i]); out.position.push_back(default_[i]+0.5*primary_action[i]);
+      out.joint_names.emplace_back(kJointNames[i]); out.position.push_back(context_->default_position[i]+0.5*primary_action[i]);
+      out.velocity.push_back(0.0); out.kp.push_back(kp_[i]); out.kd.push_back(kd_[i]); out.torque.push_back(0.0);
+    }
+    return out;
+  }
+  rll_policy::MotorCommand make_fixed_pose_command(const rll_policy::RobotState&,std::uint64_t stamp) override {
+    rll_policy::MotorCommand out; out.timestamp_ns=stamp; out.control_mode=rll_policy::MotorControlMode::mit;
+    for (std::size_t i=0;i<kJoints;++i) {
+      out.joint_names.emplace_back(kJointNames[i]); out.position.push_back(context_->default_position[i]);
       out.velocity.push_back(0.0); out.kp.push_back(kp_[i]); out.kd.push_back(kd_[i]); out.torque.push_back(0.0);
     }
     return out;
@@ -243,16 +281,16 @@ class ChocolateOutput final : public rll_policy::OutputProcessor {
   void publish(const rll_policy::MotorCommand& command) override { if (writer_) writer_(writer_context_,&command); }
  private:
   std::shared_ptr<Context> context_; rll_policy::MotorCommandWriteFn writer_{}; void* writer_context_{};
-  std::array<double,kJoints> default_,kp_,kd_;
+  std::array<double,kJoints> kp_,kd_;
 };
 }
 
 extern "C" {
 std::uint32_t rll_robot_plugin_abi_version() { return rll_policy::kRobotPluginAbiVersion; }
-rll_policy::InputProcessor* rll_create_input_processor_v1(const char* config) { return new ChocolateInput(shared_context(config)); }
-void rll_destroy_input_processor_v1(rll_policy::InputProcessor* value) { delete value; }
-rll_policy::OutputProcessor* rll_create_output_processor_v1(const char* config,rll_policy::MotorCommandWriteFn writer,void* context) {
+rll_policy::InputProcessor* rll_create_input_processor_v2(const char* config) { return new ChocolateInput(shared_context(config)); }
+void rll_destroy_input_processor_v2(rll_policy::InputProcessor* value) { delete value; }
+rll_policy::OutputProcessor* rll_create_output_processor_v2(const char* config,rll_policy::MotorCommandWriteFn writer,void* context) {
   return new ChocolateOutput(shared_context(config),writer,context);
 }
-void rll_destroy_output_processor_v1(rll_policy::OutputProcessor* value) { delete value; }
+void rll_destroy_output_processor_v2(rll_policy::OutputProcessor* value) { delete value; }
 }

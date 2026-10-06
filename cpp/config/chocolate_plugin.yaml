@@ -2,3 +2,28 @@
 # Path is resolved relative to this config; keep the motion dataset external.
 motion_file: ~/datasets/lafan1_retargeted/chocolate_dance2_subject1_50hz_20261001_manual_offsets/npz50/dance2_subject1.rllchoc
 expected_fps: 50.0
+motion_start_button_mask: 1
+default_joint:
+  left_shoulder_pitch_joint: 0.0
+  left_shoulder_roll_joint: 0.5236
+  left_shoulder_yaw_joint: 0.0
+  left_elbow_joint: 0.0
+  right_shoulder_pitch_joint: 0.0
+  right_shoulder_roll_joint: -0.5236
+  right_shoulder_yaw_joint: 0.0
+  right_elbow_joint: 0.0
+  waist_pitch_joint: 0.0
+  waist_roll_joint: 0.0
+  waist_yaw_joint: 0.0
+  left_hip_pitch_joint: -0.312414
+  left_hip_roll_joint: 0.0
+  left_hip_yaw_joint: 0.0
+  left_knee_joint: 0.72955
+  left_ankle_pitch_joint: -0.40457
+  left_ankle_roll_joint: 0.0
+  right_hip_pitch_joint: -0.312414
+  right_hip_roll_joint: 0.0
+  right_hip_yaw_joint: 0.0
+  right_knee_joint: 0.72955
+  right_ankle_pitch_joint: -0.40457
+  right_ankle_roll_joint: 0.0

@@ -25,12 +25,16 @@ struct DdsRuntimeConfig {
 
 struct PolicySlot {
   std::uint16_t index{};
+  std::string type;
   PolicyModelConfig model;
 };
+
+enum class StateCommand { policy, damping, fixed_pose };
 
 struct StateMachineConfig {
   std::string initial_state;
   std::map<std::string, std::optional<std::string>> state_policies;
+  std::map<std::string, StateCommand> state_commands;
   std::map<std::string, std::map<std::string, std::string>> transitions;
   std::map<std::uint16_t, std::string> mode_events;
   std::map<std::uint32_t, std::string> button_events;

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import threading
 import time
+import math
 from typing import Any, Callable, Protocol
 
 import hydra
@@ -33,6 +34,20 @@ class DDSIO(Protocol):
 class Renderer(Protocol):
     def update(self, model: Any, data: Any) -> None: ...
     def close(self) -> None: ...
+
+
+def _resolve_simulation_dt(model: Any, configured_dt: float | None) -> float:
+    model_option = getattr(model, "opt", None)
+    model_dt = getattr(model_option, "timestep", None)
+    if configured_dt is None:
+        resolved = float(model_dt) if model_dt is not None else 0.002
+    else:
+        resolved = float(configured_dt)
+        if model_option is not None:
+            model_option.timestep = resolved
+    if not math.isfinite(resolved) or resolved <= 0.0:
+        raise ValueError("simulation_dt must be a finite positive duration")
+    return resolved
 
 
 class SimHardwareNode:
@@ -70,6 +85,8 @@ class SimHardwareNode:
         self._reset_requested = False
         self._input_lock = threading.Lock()
         self._rc_values = RCValues()
+        self._rc_button_mask = 0
+        self._rc_button_until = float("-inf")
         self._command_lock = threading.Lock()
         self._motor_command: Any | None = None
         self._motor_command_received_at = float("-inf")
@@ -77,7 +94,14 @@ class SimHardwareNode:
         self._failure: BaseException | None = None
         self.model: Any | None = None
         self.data: Any | None = None
+        self._simulation_dt: float | None = None
         self._threads: list[threading.Thread] = []
+
+    @property
+    def simulation_dt(self) -> float:
+        if self._simulation_dt is not None:
+            return self._simulation_dt
+        return _resolve_simulation_dt(None, self.runtime.simulation_dt)
 
     @staticmethod
     def _make_data(model: Any) -> Any:
@@ -94,7 +118,13 @@ class SimHardwareNode:
     def set_rc_values(self, values: RCValues) -> None:
         """Thread-safe input hook for Viser controls or a gamepad adapter."""
         with self._input_lock:
-            self._rc_values = values
+            if values.button_mask:
+                self._rc_button_mask |= int(values.button_mask)
+                self._rc_button_until = self._monotonic() + 0.2
+            self._rc_values = RCValues(
+                enabled=values.enabled, mode=values.mode, vx=values.vx, vy=values.vy,
+                yaw_rate=values.yaw_rate,
+            )
 
     def request_reset(self) -> None:
         """Queue a reset for the simulation worker; callers never touch MjData."""
@@ -124,6 +154,9 @@ class SimHardwareNode:
         """Initialize resources, start the three workers, then join on shutdown."""
         try:
             self.model = self.profile.build_model()
+            self._simulation_dt = _resolve_simulation_dt(
+                self.model, self.runtime.simulation_dt
+            )
             self.data = self._data_factory(self.model)
             self.profile.reset(self.model, self.data)
             if callable(self._renderer_source) and not hasattr(self._renderer_source, "update"):
@@ -155,7 +188,7 @@ class SimHardwareNode:
 
     def _simulation_loop(self) -> None:
         assert self.model is not None and self.data is not None
-        period = float(self.runtime.simulation_dt)
+        period = self.simulation_dt
         deadline = self._monotonic()
         timeout = self.runtime.dds.motor_command_timeout_s
         while not self._stop.is_set():
@@ -173,7 +206,13 @@ class SimHardwareNode:
                     command = self._motor_command
                     fresh = now - self._motor_command_received_at <= timeout
                 if command is not None and fresh:
-                    self.profile.apply_motor_command(self.model, self.data, command)
+                    mode_apply = getattr(self.profile, "apply_motor_command_for_mode", None)
+                    if callable(mode_apply):
+                        with self._input_lock:
+                            mode = int(self._rc_values.mode)
+                        mode_apply(self.model, self.data, command, mode)
+                    else:
+                        self.profile.apply_motor_command(self.model, self.data, command)
                 else:
                     self.profile.apply_safe_command(self.model, self.data)
                 self._physics_step(self.model, self.data)
@@ -208,7 +247,14 @@ class SimHardwareNode:
                     self.model, self.data, timestamp_ns
                 )
             with self._input_lock:
-                rc_values = self._rc_values
+                button_mask = self._rc_button_mask if self._monotonic() <= self._rc_button_until else 0
+                if not button_mask:
+                    self._rc_button_mask = 0
+                base_values = self._rc_values
+                rc_values = RCValues(
+                    enabled=base_values.enabled, mode=base_values.mode, vx=base_values.vx,
+                    vy=base_values.vy, yaw_rate=base_values.yaw_rate, button_mask=button_mask,
+                )
             rc_command = self.profile.make_rc_command(rc_values, timestamp_ns)
             self.dds.publish_robot_state(robot_state)
             self.dds.publish_rc_command(rc_command)
@@ -230,6 +276,7 @@ def run_from_config(cfg: DictConfig) -> None:
         raise TypeError("Hydra runtime config must compose to RuntimeConfig")
     xml_path = to_absolute_path(str(cfg.xml))
     profile = XmlHardwareProfile(xml_path)
+    simulation_dt = _resolve_simulation_dt(profile.build_model(), runtime.simulation_dt)
     dds = SimHardwareDDS(runtime.dds)
 
     if runtime.viser.enabled:
@@ -245,7 +292,7 @@ def run_from_config(cfg: DictConfig) -> None:
     node = SimHardwareNode(profile, runtime, dds, renderer_factory)
     print(
         f"sim_hardware_node xml={xml_path} domain={runtime.dds.domain_id} "
-        f"simulation_dt={runtime.simulation_dt:g}s "
+        f"simulation_dt={simulation_dt:g}s "
         f"sensor_publish_hz={runtime.dds.publish_hz:g} "
         f"render_hz={runtime.viser.render_hz:g} viser={viser_url} "
         f"joints={','.join(profile.joint_names)} threads=simulation,render,dds",

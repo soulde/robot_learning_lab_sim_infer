@@ -16,6 +16,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <torch/torch.h>
 
 namespace {
 using Clock=std::chrono::steady_clock;
@@ -41,12 +42,25 @@ std::uint64_t wall_time_ns() {
 }
 rll_policy::MotorCommand infer_command(const std::string& name,const rll_policy::RobotState& state,
                                        const rll_policy::RCCommand& rc,rll_policy::RobotPluginHandle& plugin,
-                                       rll_policy::InferenceEngine& inference,std::uint64_t timestamp) {
-  auto observation=plugin.input().build_observation(name,state,rc);
+                                       rll_policy::InferenceEngine& inference,
+                                       const rll_policy::PolicyRuntimeConfig& config,std::uint64_t timestamp) {
+  const auto& slot=find_slot(config,name);
+  auto observation=plugin.input().build_observation(slot.type,state,rc);
   auto action=inference.infer(name,observation);
-  auto command=plugin.output().make_command(name,action,state,timestamp);
+  auto command=plugin.output().make_command(slot.type,action,state,timestamp);
   (void)rll_policy::blend_motor_commands(command,command,0.0,timestamp);
   return command;
+}
+rll_policy::MotorCommand state_command(const rll_policy::PolicyRuntimeConfig& config,
+                                      const std::string& state,const rll_policy::RobotState& robot,
+                                      const rll_policy::RCCommand& rc,rll_policy::RobotPluginHandle& plugin,
+                                      rll_policy::InferenceEngine& inference,std::uint64_t timestamp) {
+  const auto kind=config.state_machine.state_commands.at(state);
+  if (kind==rll_policy::StateCommand::fixed_pose)
+    return plugin.output().make_fixed_pose_command(robot,timestamp);
+  const auto policy=policy_for(config,state);
+  if (policy) return infer_command(*policy,robot,rc,plugin,inference,config,timestamp);
+  return rll_policy::make_damping_command(robot,config.damping_kd,timestamp);
 }
 void usage() {
   std::cout << "Usage: rll-policy --config <policy.yaml> [--domain-id <id>] [--cyclonedds-uri <uri>]\n";
@@ -70,6 +84,10 @@ int main(int argc,char** argv) {
       else throw std::invalid_argument("unknown or incomplete argument '"+arg+"'");
     }
     if (config_path.empty()) throw std::invalid_argument("--config is required");
+    // Single-sample MLP inference is latency-bound; large intra-op pools add
+    // CPU contention and can make the fixed-rate control loop miss deadlines.
+    torch::set_num_threads(1);
+    torch::set_num_interop_threads(1);
     auto config=rll_policy::PolicyRuntimeConfig::load(config_path);
     if (domain_override) config.dds.domain_id=*domain_override;
     if (uri_override) config.dds.cyclonedds_uri=*uri_override;
@@ -83,12 +101,13 @@ int main(int argc,char** argv) {
     rll_policy::DdsTransport dds(config.dds);
     writer_context.transport=&dds;
     rll_policy::RuntimeStateMachine state_machine(config.state_machine);
+    const auto initial_policy=policy_for(config,state_machine.state());
+    plugin.input().on_policy_selected(initial_policy ? std::string_view(find_slot(config,*initial_policy).type) : std::string_view{});
 
     std::optional<rll_policy::RobotState> robot_state;
     std::optional<rll_policy::RCCommand> rc_command, previous_rc;
     double state_received=-1.0, rc_received=-1.0;
     std::string stable_state=state_machine.state(), transition_target;
-    std::optional<std::string> transition_source_policy;
     std::optional<rll_policy::MotorCommand> transition_fixed_source,last_emitted;
     bool transition_active=false;
     Clock::time_point transition_start{};
@@ -119,23 +138,22 @@ int main(int argc,char** argv) {
           steady_s,state_received,rc_received,config.state_timeout_s,config.rc_timeout_s,
           robot_state.has_value(),rc_command.has_value());
       if (!fresh) {
-        transition_active=false; transition_source_policy.reset(); transition_fixed_source.reset();
+        transition_active=false; transition_fixed_source.reset();
         stable_state=state_machine.state(); last_emitted.reset();
       } else {
         const auto desired_state=state_machine.state();
         if (desired_state!=(transition_active?transition_target:stable_state)) {
           std::cout << "[state] " << (transition_active?transition_target:stable_state)
                     << " -> " << desired_state << std::endl;
-          const bool interrupted=transition_active;
+          const auto selected_policy=policy_for(config,desired_state);
+          plugin.input().on_policy_selected(selected_policy ? std::string_view(find_slot(config,*selected_policy).type) : std::string_view{});
           transition_target=desired_state; transition_start=loop_start;
           transition_active=config.transition_duration_s>0.0;
-          transition_source_policy.reset(); transition_fixed_source.reset();
+          transition_fixed_source.reset();
           if (transition_active) {
-            if (interrupted) transition_fixed_source=last_emitted;
-            else transition_source_policy=policy_for(config,stable_state);
-            if (!transition_source_policy && !transition_fixed_source) {
-              transition_fixed_source=last_emitted ? last_emitted : std::optional<rll_policy::MotorCommand>(
-                  rll_policy::make_damping_command(*robot_state,config.damping_kd,wall_time_ns()));
+            if (last_emitted) transition_fixed_source=last_emitted;
+            if (!transition_fixed_source) {
+              transition_fixed_source=rll_policy::make_damping_command(*robot_state,config.damping_kd,wall_time_ns());
             }
           } else stable_state=desired_state;
         }
@@ -143,21 +161,15 @@ int main(int argc,char** argv) {
         const auto now_ns=wall_time_ns();
         rll_policy::MotorCommand output;
         if (transition_active) {
-          auto target_policy=policy_for(config,transition_target);
-          auto target=target_policy ? infer_command(*target_policy,*robot_state,*rc_command,plugin,inference,now_ns)
-                                    : rll_policy::make_damping_command(*robot_state,config.damping_kd,now_ns);
-          rll_policy::MotorCommand source;
-          if (transition_source_policy) source=infer_command(*transition_source_policy,*robot_state,*rc_command,plugin,inference,now_ns);
-          else source=*transition_fixed_source;
+          auto target=state_command(config,transition_target,*robot_state,*rc_command,plugin,inference,now_ns);
+          const auto& source=*transition_fixed_source;
           const double raw=std::chrono::duration<double>(loop_start-transition_start).count()/config.transition_duration_s;
           const double p=std::clamp(raw,0.0,1.0); const double alpha=p*p*(3.0-2.0*p);
           output=rll_policy::blend_motor_commands(source,target,alpha,now_ns);
           plugin.output().publish(output); last_emitted=output;
-          if (raw>=1.0) { stable_state=transition_target; transition_active=false; transition_source_policy.reset(); transition_fixed_source.reset(); }
+          if (raw>=1.0) { stable_state=transition_target; transition_active=false; transition_fixed_source.reset(); }
         } else {
-          const auto policy=policy_for(config,stable_state);
-          output=policy ? infer_command(*policy,*robot_state,*rc_command,plugin,inference,now_ns)
-                        : rll_policy::make_damping_command(*robot_state,config.damping_kd,now_ns);
+          output=state_command(config,stable_state,*robot_state,*rc_command,plugin,inference,now_ns);
           plugin.output().publish(output); last_emitted=output;
         }
       }

@@ -30,6 +30,15 @@ class TestOutput final : public rll_policy::OutputProcessor {
     }
     return out;
   }
+  rll_policy::MotorCommand make_fixed_pose_command(const rll_policy::RobotState& state,
+                                                    std::uint64_t stamp) override {
+    rll_policy::MotorCommand out; out.timestamp_ns=stamp; out.joint_names=state.joint_names;
+    for (std::size_t i=0;i<state.joint_names.size();++i) {
+      out.position.push_back(0.0); out.velocity.push_back(0.0); out.kp.push_back(10.0);
+      out.kd.push_back(0.5); out.torque.push_back(0.0);
+    }
+    return out;
+  }
   void publish(const rll_policy::MotorCommand& command) override { if (writer_) writer_(context_, &command); }
  private:
   rll_policy::MotorCommandWriteFn writer_{}; void* context_{};
@@ -38,10 +47,10 @@ class TestOutput final : public rll_policy::OutputProcessor {
 
 extern "C" {
 std::uint32_t rll_robot_plugin_abi_version() { return RLL_PLUGIN_ABI; }
-rll_policy::InputProcessor* rll_create_input_processor_v1(const char*) { return new TestInput(); }
-void rll_destroy_input_processor_v1(rll_policy::InputProcessor* value) { delete value; }
-rll_policy::OutputProcessor* rll_create_output_processor_v1(const char*, rll_policy::MotorCommandWriteFn writer, void* context) {
+rll_policy::InputProcessor* rll_create_input_processor_v2(const char*) { return new TestInput(); }
+void rll_destroy_input_processor_v2(rll_policy::InputProcessor* value) { delete value; }
+rll_policy::OutputProcessor* rll_create_output_processor_v2(const char*, rll_policy::MotorCommandWriteFn writer, void* context) {
   return new TestOutput(writer, context);
 }
-void rll_destroy_output_processor_v1(rll_policy::OutputProcessor* value) { delete value; }
+void rll_destroy_output_processor_v2(rll_policy::OutputProcessor* value) { delete value; }
 }

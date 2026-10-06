@@ -39,7 +39,7 @@ def main() -> int:
         "  transition_duration_s: 0.1", "device: cpu", "plugin:",
         f"  path: {json.dumps(str(plugin))}", "  config: test-plugin.yaml", "damping:", "  kd: 0.5",
         "policies:", "  - index: 1", "    name: velocity",
-        f"    checkpoint: {json.dumps(str(checkpoint))}", "    observation_dim: 2", "    action_dim: 2",
+        f"    type: velocity", f"    checkpoint: {json.dumps(str(checkpoint))}", "    observation_dim: 2", "    action_dim: 2",
         "state_machine:", "  initial_state: damping", "  states:", "    damping:", "      policy: null",
         f"      transitions: {{ {mode_damping}: damping, {mode_walk}: velocity }}", "    velocity:",
         "      policy: velocity", f"      transitions: {{ {mode_damping}: damping, {mode_walk}: velocity }}",

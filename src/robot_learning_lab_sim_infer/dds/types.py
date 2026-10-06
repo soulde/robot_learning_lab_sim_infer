@@ -47,7 +47,6 @@ class RCCommand(IdlStruct, typename=f"{_TYPE_NS}.RCCommand"):
     vx: types.float32
     vy: types.float32
     yaw_rate: types.float32
-    body_height: types.float32
     button_mask: types.uint32
 
 

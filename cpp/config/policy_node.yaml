@@ -26,6 +26,7 @@ damping:
 
 policies:
   - index: 1
+    type: velocity
     name: walk
     checkpoint: ./walk_policy.pt
     observation_dim: 78
