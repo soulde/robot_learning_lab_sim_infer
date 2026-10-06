@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from robot_learning_lab_sim_infer.config_api import compose_config, validate_profile
+from robot_learning_lab_sim_infer.config_api import compose_config, validate_sim_profile
 from robot_learning_lab_sim_infer.configs import RCConfig, RuntimeConfig, StateMachineConfig
 from robot_learning_lab_sim_infer.runtime.rc import RCMapper
 from robot_learning_lab_sim_infer.runtime.state_machine import RuntimeStateMachine
@@ -16,9 +16,9 @@ def test_compose_config_keeps_package_and_external_ownership_separate():
     assert result.external is external
 
 
-def test_validate_policy_profile_reports_missing_members():
-    with pytest.raises(TypeError, match="observe"):
-        validate_profile(SimpleNamespace(), kind="policy")
+def test_validate_sim_profile_reports_missing_members():
+    with pytest.raises(TypeError, match="name"):
+        validate_sim_profile(SimpleNamespace())
 
 
 def test_state_machine_transitions_and_reset():

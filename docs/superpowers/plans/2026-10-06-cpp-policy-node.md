@@ -149,13 +149,13 @@
 - The config and plugin ABI guide document how a robot-specific shared library and TorchScript checkpoint are selected.
 - The interop test launches the existing Python simulator and a C++ native policy process in separate processes on a test DDS domain with the test plugin and TorchScript fixture.
 
-- [ ] **Step 1: Write the packaging contract test** to assert CMake installs a native `rll-policy` binary and that `pyproject.toml` no longer registers a Python console script with the same name.
-- [ ] **Step 2: Run the packaging contract test** and confirm it fails because the Python project still owns the `rll-policy` binding and CMake has no install target.
-- [ ] **Step 3: Replace the Python `rll-policy` console binding** with CMake installation of the native target, remove the obsolete Python node/test and policy-only Python profile contract, and update README build/run/plugin instructions.
-- [ ] **Step 4: Run the packaging contract test**; expected: the installed command resolves to the native C++ executable and Python sim/dummy commands remain.
-- [ ] **Step 5: Re-run the native interop test** on an isolated Cyclone DDS domain; expected: sensor/RC-to-TorchScript-to-MotorCommand round trip passes across C++ and Python processes.
-- [ ] **Step 6: Run `ctest --test-dir build-cpp --output-on-failure` and the full Python suite `pytest -q`**; expected: all C++ and Python tests pass.
-- [ ] **Step 7: Commit** as `feat: replace Python policy node with C++ executable`.
+- [x] **Step 1: Write the packaging contract test** to assert CMake installs a native `rll-policy` binary and that `pyproject.toml` no longer registers a Python console script with the same name.
+- [x] **Step 2: Run the packaging contract test** and confirm it fails because the Python project still owns the `rll-policy` binding and CMake has no install target.
+- [x] **Step 3: Replace the Python `rll-policy` console binding** with CMake installation of the native target, remove the obsolete Python node/test and policy-only Python profile contract, and update README build/run/plugin instructions.
+- [x] **Step 4: Run the packaging contract test**; expected: the installed command resolves to the native C++ executable and Python sim/dummy commands remain.
+- [x] **Step 5: Re-run the native interop test** on an isolated Cyclone DDS domain; expected: sensor/RC-to-TorchScript-to-MotorCommand round trip passes across C++ and Python processes.
+- [x] **Step 6: Run `ctest --test-dir build-cpp --output-on-failure` and the full Python suite `pytest -q`**; expected: all C++ and Python tests pass.
+- [x] **Step 7: Commit** as `feat: replace Python policy node with C++ executable`.
 
 ## Execution Notes
 

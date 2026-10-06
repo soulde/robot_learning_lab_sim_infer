@@ -15,7 +15,7 @@ import hydra
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 
-from ..config_api import validate_profile
+from ..config_api import validate_sim_profile
 from ..configs.hydra_sim import register_configs
 from ..configs import RuntimeConfig
 from ..runtime.rc import RCValues
@@ -52,7 +52,7 @@ class SimHardwareNode:
         clock_ns: Callable[[], int] = time.time_ns,
         monotonic: Callable[[], float] = time.monotonic,
     ):
-        validate_profile(profile, kind="sim")
+        validate_sim_profile(profile)
         for member in ("make_rc_command", "apply_safe_command"):
             if not callable(getattr(profile, member, None)):
                 raise TypeError(f"Sim profile is missing required member: {member}")

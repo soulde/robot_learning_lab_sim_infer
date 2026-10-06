@@ -98,15 +98,33 @@ rll-sim-hardware runtime.viser.enabled=false
 
 默认遥控范围为 `vx=[-1,1] m/s`、`vy=[-0.6,0.6] m/s`、`yaw_rate=[-1.5,1.5] rad/s` 和 `body_height=[0.2,0.5] m`。I/K、J/L、U/O 每按一次分别按配置步长增减对应指令，键盘遥控始终使能；Z 将三个速度指令清零。滑块可直接输入命令。可用 `runtime.rc.key_steps.vx=0.2` 设置按键步长，并用 `runtime.rc.axis_ranges.vx=[-0.8,1.2]` 调整限幅。
 
-策略推理与状态机由独立 policy 进程负责。
+策略推理与状态机由独立的 native C++ policy 进程负责。它使用 Cyclone DDS C API 与 LibTorch TorchScript，不依赖 ROS 或 Boost。Python `rll-dummy-control` 仍用于检查 DDS 闭环，但不是正式推理节点。
 
-策略进程通过同一组 `robot/state`、`robot/rc_command`、`robot/motor_command` topic 通信。它的外部 profile 只接收生成的机器人状态和 RC 类型，实现 `observe(policy_name, robot_state, rc_command)`、`infer(policy_name, observation)` 以及 `make_motor_command(...)`；状态机转换和 policy 选择使用包内 `RuntimeStateMachine`，由 policy 进程独占执行。
+### Native policy node
+
+在已安装 Cyclone DDS 开发包和 yaml-cpp 的环境中构建。`CMAKE_PREFIX_PATH` 指向当前 PyTorch/LibTorch 安装提供的 CMake package；Isaac Lab EA 环境的示例如下：
 
 ```bash
-rll-policy --config my_robot.policy_config:PolicyProfile --domain-id 0
+source ~/env_isaaclab_ea/bin/activate
+cmake -S cpp -B build-cpp \
+  -DCMAKE_INSTALL_PREFIX="$PWD/build-cpp/install" \
+  -DCMAKE_PREFIX_PATH="$VIRTUAL_ENV/lib/python3.12/site-packages/torch/share/cmake"
+cmake --build build-cpp -j2
+cmake --install build-cpp
 ```
 
-可用 Hydra dummy policy 节点验证 DDS 闭环。它每 50 Hz 读取最新状态和遥控器数据并打印观测，按 RC mode 切换已配置策略槽位；当前 `observe`/`infer` 是占位实现，会打印策略编号并输出零 action。策略槽位的文件路径、编号和 Kp/Kd，以及阻尼 Kd 都在 `configs/dummy_control.yaml` 中配置。mode 0 发布零目标、Kp=0、固定 Kd 的 MIT 阻尼指令；mode 1–9 只选择已配置槽位，其他编号不改变当前状态。
+运行时 YAML 指定 DDS domain/topics、执行频率、插件库、插件配置、TorchScript 文件、观测/动作维数、策略槽位、Kp/Kd 和状态机。策略切换的观测构造、关节映射和动作缩放由 robot plugin 负责；通用节点负责 DDS 收发、TorchScript 推理、输入新鲜度检查、阻尼模式和输出平滑过渡。
+
+```bash
+build-cpp/install/bin/rll-policy --help
+build-cpp/install/bin/rll-policy --config /path/to/policy.yaml
+```
+
+插件是一个由 `dlopen` 加载的 C++ shared library，实现 `cpp/include/rll_policy/processors.hpp` 的 `InputProcessor` 和 `OutputProcessor`，并导出 `cpp/include/rll_policy/plugin_api.hpp` 中的 ABI v1 工厂/销毁函数。输出处理器通过宿主注入的 writer 发布 `MotorCommand`，不需要访问 DDS 实现。插件和节点必须使用兼容的编译器、LibTorch ABI 与 SDK 版本。仓库默认配置 `cpp/config/policy_node.yaml` 只展示通用字段；机器人必须提供自己的插件和策略配置。
+
+### Dummy DDS control node
+
+Dummy 节点每 50 Hz 读取最新状态和遥控器数据并打印观测，按 RC mode 切换已配置策略槽位；当前 `observe`/`infer` 是占位实现，会打印策略编号并输出零 action。策略槽位的文件路径、编号和 Kp/Kd，以及阻尼 Kd 都在 `configs/dummy_control.yaml` 中配置。mode 0 发布零目标、Kp=0、固定 Kd 的 MIT 阻尼指令；mode 1–9 只选择已配置槽位，其他编号不改变当前状态。
 
 ```bash
 rll-dummy-control dds.domain_id=23 control.rate_hz=50 control.damping_kd=0.5

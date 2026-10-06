@@ -42,6 +42,15 @@ target_link_libraries(rll_policy_runtime PUBLIC rll_policy_inference rll_policy_
 add_executable(rll-policy src/main.cpp)
 target_link_libraries(rll-policy PRIVATE rll_policy_plugin_loader rll_policy_runtime)
 
+# Torch is commonly provided by the active Isaac Lab environment rather than
+# the system loader path. Preserve that library location for installed users.
+get_filename_component(TORCH_PACKAGE_ROOT "${Torch_DIR}/../../.." ABSOLUTE)
+set_property(TARGET rll-policy APPEND PROPERTY INSTALL_RPATH "${TORCH_PACKAGE_ROOT}/lib")
+install(TARGETS rll-policy RUNTIME DESTINATION bin)
+install(FILES config/policy_node.yaml DESTINATION share/rll-policy/config)
+install(FILES include/rll_policy/messages.hpp include/rll_policy/processors.hpp
+              include/rll_policy/plugin_api.hpp DESTINATION include/rll_policy)
+
 include(CTest)
 if(BUILD_TESTING)
   add_executable(dds_contract_test tests/dds_contract_test.cpp)
@@ -86,4 +95,8 @@ if(BUILD_TESTING)
   add_test(NAME native_sim_interop COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/native_sim_interop_test.py"
     --binary "$<TARGET_FILE:rll-policy>" --python "${Python3_EXECUTABLE}")
+  add_test(NAME install_contract_test COMMAND "${CMAKE_COMMAND}"
+    -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+    -DBINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/install_contract_test.cmake")
 endif()
