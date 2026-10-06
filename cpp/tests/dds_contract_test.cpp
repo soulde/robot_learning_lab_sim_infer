@@ -1,10 +1,11 @@
-#include "rll_policy/messages.hpp"
+#include "rll_policy/detail/dds_messages.hpp"
 
 #include <cassert>
 #include <stdexcept>
 
 int main() {
   using namespace rll_policy;
+  using namespace rll_policy::detail;
   static_assert(static_cast<int>(MotorControlMode::position) == 0);
   static_assert(static_cast<int>(MotorControlMode::mit) == 3);
 

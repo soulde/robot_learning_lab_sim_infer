@@ -1,7 +1,5 @@
 #pragma once
 
-#include "robot_v1.h"
-
 #include <array>
 #include <cstdint>
 #include <string>
@@ -37,14 +35,5 @@ struct MotorCommand {
   std::vector<std::string> joint_names;
   std::vector<double> position, velocity, kp, kd, torque;
 };
-
-// The returned C struct owns its sequence buffers; release it with the generated
-// <Type>_free(&sample, DDS_FREE_ALL) function after DDS has copied/written it.
-robot_learning_lab_sim_infer_msg_v1_RobotState to_idl(const RobotState& value);
-RobotState from_idl(const robot_learning_lab_sim_infer_msg_v1_RobotState& value);
-robot_learning_lab_sim_infer_msg_v1_RCCommand to_idl(const RCCommand& value);
-RCCommand from_idl(const robot_learning_lab_sim_infer_msg_v1_RCCommand& value);
-robot_learning_lab_sim_infer_msg_v1_MotorCommand to_idl(const MotorCommand& value);
-MotorCommand from_idl(const robot_learning_lab_sim_infer_msg_v1_MotorCommand& value);
 
 }  // namespace rll_policy

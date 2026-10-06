@@ -1,10 +1,10 @@
-#include "rll_policy/messages.hpp"
+#include "rll_policy/detail/dds_messages.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
-namespace rll_policy {
+namespace rll_policy::detail {
 namespace {
 template <std::size_t N, typename T>
 void check_size(const std::vector<T>& values, const char* name) {

@@ -73,11 +73,11 @@
 - `RobotPluginHandle::load(const std::filesystem::path& plugin_path, const std::filesystem::path& config_path)` verifies ABI v1 and creates both processors; the handle keeps the library loaded until after both plugin objects are destroyed.
 - Plugin exports: `uint32_t rll_robot_plugin_abi_version()`, `InputProcessor* rll_create_input_processor_v1(const char* config_path)`, `void rll_destroy_input_processor_v1(InputProcessor*)`, `OutputProcessor* rll_create_output_processor_v1(const char* config_path, MotorCommandWriteFn, void* context)`, and `void rll_destroy_output_processor_v1(OutputProcessor*)`.
 
-- [ ] **Step 1: Write failing loader/processor tests** for a test plugin that builds a two-value tensor from state/RC, maps a two-value action to named motor fields, calls the injected writer, destroys plugin instances before unloading, and for missing-library, missing-symbol, and wrong-ABI cases returns clear errors.
-- [ ] **Step 2: Build and run `plugin_loader_test`**; confirm compile or load tests fail because the interface and loader are absent.
-- [ ] **Step 3: Implement the processor interfaces and project-owned `dlopen/dlsym` loader** with ABI version checks and destroy-before-unload lifetime.
-- [ ] **Step 4: Implement the test plugin** using the exact public SDK header and verify it maps real nonzero inputs/actions (no zero-action fallback).
-- [ ] **Step 5: Run `ctest --test-dir build-cpp -R 'plugin_loader|processor' --output-on-failure`**; expected: valid plugin passes, missing symbols and ABI mismatch are rejected.
+- [x] **Step 1: Write failing loader/processor tests** for a test plugin that builds a two-value tensor from state/RC, maps a two-value action to named motor fields, calls the injected writer, destroys plugin instances before unloading, and for missing-library, missing-symbol, and wrong-ABI cases returns clear errors.
+- [x] **Step 2: Build and run `plugin_loader_test`**; confirm compile or load tests fail because the interface and loader are absent.
+- [x] **Step 3: Implement the processor interfaces and project-owned `dlopen/dlsym` loader** with ABI version checks and destroy-before-unload lifetime.
+- [x] **Step 4: Implement the test plugin** using the exact public SDK header and verify it maps real nonzero inputs/actions (no zero-action fallback).
+- [x] **Step 5: Run `ctest --test-dir build-cpp -R 'plugin_loader|processor' --output-on-failure`**; expected: valid plugin passes, missing symbols and ABI mismatch are rejected.
 - [ ] **Step 6: Commit** as `feat: add versioned robot policy plugin API`.
 
 ### Task 3: LibTorch TorchScript inference engine
